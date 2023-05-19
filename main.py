@@ -29,8 +29,8 @@ class MainMenu:
     standardMenuWidth = 512
     self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "START")
     self.menuOptions = [
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: fhdj", "Player 1: dfjsbgfjs"),
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: fhdj", "Player 2: dfjsbgfjs"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: dfjsbgfjs"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: dfjsbgfjs"),
       self.startMenuOption
     ] # Create menu options
     self.currentIndex = 0
@@ -175,11 +175,15 @@ class Game:
     self.players = []
     if player1option == 0:
       self.players.append(BarrelMan(self, (100, 100), 'left'))
+    elif player1option == 1:
+      self.players.append(Pog(self, (100, 100), 'left'))
     else:
       self.players.append(Player(self, (100, 100), 'left'))
 
     if player2option == 0:
       self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
+    elif player2option == 1:
+      self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
     else:
       self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
 
@@ -297,6 +301,10 @@ class Platform(GameObject):
 # PLAYER CLASS
 
 class Player(GameObject):
+  firstAbilityHeld = False
+  secondAbilityHeld = False
+  ultAbilityHeld = False
+  downwardsAbilityHeld = False
 
   def __init__(self, game, coords, playerSide):
     self.game = game
@@ -610,9 +618,25 @@ class BarrelMan(Player):
   def activateDownwardsAbility(self):
     super().activateDownwardsAbility()
     self.game.obstacles.append(VeryLongSword(self.game, (self.x, self.y), self))
-    self.yDir = 15;
+    self.yDir = 15
 
+# POG CHARACTER
 
+class Pog(Player):
+
+  def __init__(self, game, coords, playerSide):
+    super().__init__(game, coords, playerSide)
+    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height))
+    self.weight = 5
+    self.jumpingPower = 25
+    self.totalAirJumps = 4
+
+  def draw(self):
+    super().draw(self.image)
+
+  def activateFirstAbility(self):
+    super().activateFirstAbility()
+    self.game.obstacles.append(PogProjectile(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self))
 
 
 
@@ -710,6 +734,24 @@ class Dagger(Obstacle):
     self.y -= self.yDir
     self.inAir = False
 
+class PogProjectile(Obstacle):
+
+  def __init__(self, game, coords, shotBy):
+    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (12, 12)), shotBy, 5)
+    if shotBy.direction > 0:
+      self.xDir = 9
+    else:
+      self.xDir = -9
+
+  def onCollision(self, player):
+    player.punched(self.immunePlayer, 12, 0.9)
+
+  def update(self, game, deltaT):
+    super().update(game, deltaT)
+    for platform in game.platforms:
+      if self.rect.colliderect(platform.rect):
+        self.mustBeRemoved = True
+
 
 # ================================================================
 # ================================================================
@@ -731,12 +773,16 @@ while True:
   sPressed = keys[gameGlobals.K_s]
   aPressed = keys[gameGlobals.K_a]
   dPressed = keys[gameGlobals.K_d]
+  bPressed = keys[gameGlobals.K_b]
+  nPressed = keys[gameGlobals.K_n]
   mPressed = keys[gameGlobals.K_m]
   hPressed = keys[gameGlobals.K_h]
   upPressed = keys[gameGlobals.K_UP]
   downPressed = keys[gameGlobals.K_DOWN]
   leftPressed = keys[gameGlobals.K_LEFT]
   rightPressed = keys[gameGlobals.K_RIGHT]
+  num1Pressed = keys[gameGlobals.K_KP1]
+  num2Pressed = keys[gameGlobals.K_KP2]
   num3Pressed = keys[gameGlobals.K_KP3]
   num5Pressed = keys[gameGlobals.K_KP5]
   wTapped, sTapped, upTapped, downTapped, leftTapped, rightTapped, spaceTapped, keyTapped = False, False, False, False, False, False, False, False # Set tapped keys to be false
