@@ -301,10 +301,10 @@ class Platform(GameObject):
 # PLAYER CLASS
 
 class Player(GameObject):
-  firstAbilityHeld = False
-  secondAbilityHeld = False
-  ultAbilityHeld = False
-  downwardsAbilityHeld = False
+  firstAbilityIsHeld = False
+  secondAbilityIsHeld = False
+  ultAbilityIsHeld = False
+  downwardsAbilityIsHeld = False
 
   def __init__(self, game, coords, playerSide):
     self.game = game
@@ -391,8 +391,11 @@ class Player(GameObject):
       self.rightControl = dPressed
       self.upControl = wTapped
       self.downControl = sTapped
+      self.downControlHeld = sPressed
       self.firstAbilityControl = nTapped
+      self.firstAbilityControlHeld = nPressed
       self.secondAbilityControl = mTapped
+      self.secondAbilityControlHeld = mTapped
       self.shieldControl = hPressed
       self.punchControl = bTapped
       self.ultControl = bTapped and self.xDir == 0
@@ -401,8 +404,11 @@ class Player(GameObject):
       self.rightControl = rightPressed
       self.upControl = upTapped
       self.downControl = downTapped
+      self.downControlHeld = downPressed
       self.firstAbilityControl = num2Tapped
+      self.firstAbilityControlHeld = num2Pressed
       self.secondAbilityControl = num3Tapped
+      self.secondAbilityControlHeld = num3Pressed
       self.shieldControl = num5Pressed
       self.punchControl = num1Tapped
       self.ultControl = num1Tapped and self.xDir == 0
@@ -423,6 +429,24 @@ class Player(GameObject):
         self.x -= self.xDir
 
   def detectControls(self):
+
+    if self.firstAbilityIsHeld and self.activeAbilities['first']:
+      if self.firstAbilityControlHeld:
+        self.pressedFirstAbility()
+      else:
+        self.releaseFirstAbility()
+    if self.secondAbilityIsHeld and self.activeAbilities['second']:
+      print(self.secondAbilityControlHeld)
+      if self.secondAbilityControlHeld:
+        self.pressedSecondAbility()
+      else:
+        self.releaseSecondAbility()
+    if self.downwardsAbilityIsHeld and self.activeAbilities['down']:
+      if self.downControlHeld:
+        self.pressedDownAbility()
+      else:
+        self.releaseDownAbility()
+
     if not self.speedLocked:
       if self.leftControl: # Move left if a is pressed
         self.direction = -1
@@ -448,18 +472,27 @@ class Player(GameObject):
         self.yDir = -self.jumpingPower / self.weight
     if self.downControl and self.inAir: # Use downwards ability if s is pressed
       self.activateDownwardsAbility()
+      if self.downwardsAbilityIsHeld:
+        self.activeAbilities['down'] = True
     elif self.firstAbilityControl and self.activeAbilities['first'] == False: # Use first ability if first ability key is pressed
       self.activateFirstAbility()
+      if self.firstAbilityIsHeld:
+        self.activeAbilities['first'] = True
     elif self.secondAbilityControl and self.activeAbilities['second'] == False: # Use second ability if second ability key is pressed
       self.activateSecondAbility()
+      if self.secondAbilityIsHeld:
+        self.activeAbilities['second'] = True
     elif self.ultControl and self.activeAbilities['ult'] == False: # Use second ability if second ability key is pressed
       self.activateUltAbility()
+      if self.ultAbilityIsHeld:
+        self.activeAbilities['ult'] = True
     if self.punchControl:
       self.punch()
     else:
       self.attackBox = None
-
+    
     if self.shieldControl and self.xDir == 0 and self.yDir == 0 and time.time() - self.shieldStartTimer < 2 and not self.shieldButtonPressed:
+
       self.shieldActive = True
     else:
       self.shieldStartTimer = time.time()
@@ -509,20 +542,38 @@ class Player(GameObject):
     
 
   # FIRST ABILITY:
-  def activateFirstAbility(self, time = 0, endable = False):
+  def activateFirstAbility(self, time = 0, endable = False): # TAP OR BEGIN PRESSING ABILITY
     self.firstAbilityControl = False
-    if time > 0:
+    if time > 0 and not self.firstAbilityIsHeld:
       self.activeAbilities['first'] = [time * 1000, endable]
+
+  def pressedFirstAbility(self): # IF ABILITY IS HELD: RUN WHILE ABILITY BUTTON IS PRESSED
+    pass;
+
+  def releaseFirstAbility(self, time = 0, endable = False): # IF ABILITY IS HELD: RUN ONCE ABILITY BUTTON IS RELEASED
+    if time > 0 and not self.firstAbilityIsHeld:
+      self.activeAbilities['first'] = [time * 1000, endable]
+    else:
+      self.activeAbilities['first'] = False
   
-  def duringFirstAbility(self):
+  def duringFirstAbility(self): # IF ABILITY IS TIMED: RUN WHILE ABILITY IS ACTIVE
     return False
   
-  def endFirstAbility(self):
+  def endFirstAbility(self): # IF ABILITY IS TIMED: RUN WHEN ABILITY ENDS
     self.activeAbilities['first'] = False
 
   # SECOND ABILITY
-  def activateSecondAbility(self):
+  def activateSecondAbility(self, time = 0, endable = False):
     self.secondAbilityControl = False
+
+  def pressedSecondAbility(self):
+    pass;
+
+  def releaseSecondAbility(self, time = 0, endable = False):
+    if time > 0 and not self.secondAbilityIsHeld:
+      self.activeAbilities['second'] = [time * 1000, endable]
+    else:
+      self.activeAbilities['second'] = False
   
   def duringSecondAbility(self):
     return False
@@ -531,9 +582,18 @@ class Player(GameObject):
     self.activeAbilities['second'] = False
   
   # DOWNWARDS ABILITY
-  def activateDownwardsAbility(self):
+  def activateDownwardsAbility(self, time = 0, endable = False):
     self.downControl = False
     self.yDir = 5
+    
+  def pressedDownAbility(self):
+    pass;
+
+  def releaseDownAbility(self, time = 0, endable = False):
+    if time > 0 and not self.downwardsAbilityIsHeld:
+      self.activeAbilities['down'] = [time * 1000, endable]
+    else:
+      self.activeAbilities['down'] = False
   
   def duringDownAbility(self):
     return False
@@ -542,9 +602,18 @@ class Player(GameObject):
     self.activeAbilities['down'] = False
   
   # ULT ABILITY
-  def activateUltAbility(self):
+  def activateUltAbility(self, time = 0, endable = False):
     self.ultControl = False
     pass
+  
+  def pressedUltAbility(self):
+    pass;
+
+  def releaseUltAbility(self, time = 0, endable = False):
+    if time > 0 and not self.ultAbilityIsHeld:
+      self.activeAbilities['ult'] = [time * 1000, endable]
+    else:
+      self.activeAbilities['ult'] = False
   
   def duringUltAbility(self):
     return False
@@ -623,6 +692,7 @@ class BarrelMan(Player):
 # POG CHARACTER
 
 class Pog(Player):
+  secondAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide):
     super().__init__(game, coords, playerSide)
@@ -637,6 +707,14 @@ class Pog(Player):
   def activateFirstAbility(self):
     super().activateFirstAbility()
     self.game.obstacles.append(PogProjectile(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self))
+
+  def activateSecondAbility(self, time=0, endable=False):
+    super().activateSecondAbility(time, endable)
+    print("A")
+
+  def releaseSecondAbility(self, time=0, endable=False):
+    return super().releaseSecondAbility(time, endable)
+    print("B")
 
 
 
@@ -746,12 +824,6 @@ class PogProjectile(Obstacle):
   def onCollision(self, player):
     player.punched(self.immunePlayer, 12, 0.9)
 
-  def update(self, game, deltaT):
-    super().update(game, deltaT)
-    for platform in game.platforms:
-      if self.rect.colliderect(platform.rect):
-        self.mustBeRemoved = True
-
 
 # ================================================================
 # ================================================================
@@ -831,6 +903,3 @@ while True:
 
 
   currMenu.update(deltaT)
-      
-
-      # LAST UPDATED: MAY 18 10:27AM
