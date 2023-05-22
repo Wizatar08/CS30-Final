@@ -36,7 +36,7 @@ class MainMenu:
     self.currentIndex = 0
     
 
-  def update(self, deltaT):
+  def update(self):
     for i in range(len(self.menuOptions)): # Loop through all menu options
       self.menuOptions[i].isSelected = i == self.currentIndex # If the current index is on it, say that this is selected
       self.menuOptions[i].update() # Update
@@ -194,14 +194,14 @@ class Game:
     for i in range(len(self.players)):
       self.percentageRectangles.append(TransparentRectangle((50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 80), (100, 50), 127, PLAYER_COLORS[i], Text(TEXT_FONT, '0%')))
 
-  def update(self, deltaT):
+  def update(self):
     # Update platforms
     for platform in self.platforms:
-      platform.update(self, deltaT)
+      platform.update(self)
 
     # Update players
     for player in self.players:
-      player.update(self, deltaT)
+      player.update(self)
 
     # Player attack box collisions
     for player in self.players:
@@ -211,7 +211,7 @@ class Game:
     
     removableObstacles = []
     for obstacle in self.obstacles:
-      obstacle.update(self, deltaT)
+      obstacle.update(self)
       if obstacle.mustBeRemoved:
         removableObstacles.append(obstacle)
     for obstacle in removableObstacles:
@@ -248,7 +248,7 @@ class GameObject:
     self.usesGravity = False
     self.inAir = True
 
-  def update(self, game, deltaT):
+  def update(self, game):
     self.rect.update(self.x, self.y, self.width, self.height)
     if self.usesGravity:
       self.gravity()
@@ -378,12 +378,12 @@ class Player(GameObject):
     
 
 
-  def update(self, game, deltaT): # Update every frame
+  def update(self, game): # Update every frame
     self.collideWithPlatforms(game) # Check collisions with platforms
     self.updateControls()
-    super().update(game, deltaT) # Call super function
+    super().update(game) # Call super function
     self.detectControls()
-    self.updateAbilities(deltaT)
+    self.updateAbilities()
 
   def updateControls(self): # Detect specific keys to be tapped or pressed, determined by which side of the keyboard the player is using
     if self.playerSide == 'left':
@@ -510,7 +510,7 @@ class Player(GameObject):
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
 
 
-  def updateAbilities(self, deltaT):
+  def updateAbilities(self):
 
     # FIRST ABILITY UPDATE
     if type(self.activeAbilities['first']) == list:
@@ -584,7 +584,6 @@ class Player(GameObject):
   # DOWNWARDS ABILITY
   def activateDownwardsAbility(self, time = 0, endable = False):
     self.downControl = False
-    self.yDir = 5
     
   def pressedDownAbility(self):
     pass;
@@ -633,12 +632,14 @@ class Player(GameObject):
     self.xDir = (math.cos(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
     self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
     self.percentage += damage
+    self.percentage = round(self.percentage, 1)
 
 
 
 # BARREL MAN CHARACTER
 
 class BarrelMan(Player):
+  firstAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide):
     super().__init__(game, coords, playerSide)
@@ -648,6 +649,9 @@ class BarrelMan(Player):
     self.rollImage = pygame.transform.scale(pygame.image.load(
       'assets/images/characters/barrel_man/barrel_man_roll.png'
     ), (self.width, self.height)) # Load rolling image
+
+    # First ability timer
+    self.rollTimer = 0
 
     # Second ability cooldown
     self.daggerTimer = 0
@@ -660,20 +664,21 @@ class BarrelMan(Player):
 
   def activateFirstAbility(self):
     if self.xDir != 0: # If there is movement on the x-plane
-      super().activateFirstAbility(1.5, True) # Activate first ability
+      super().activateFirstAbility() # Activate first ability
       self.xDir = (self.xDir // abs(self.xDir)) * 10 # Set speed
       self.speedLocked = True # Lock speed
+      self.rollTimer = time.time()
   
-  def duringFirstAbility(self):
+  def pressedFirstAbility(self):
     hitPlayer = self.game.hitPlayer(self) # Find a hit player
     if hitPlayer != None: # If there is a hit player
-      self.endFirstAbility() # End the ability
+      self.releaseFirstAbility() # End the ability
       hitPlayer.punched(self, 36, 1.8) # Launch player
-      return False # Do not run the timer code
-    return True
+    if time.time() - self.rollTimer > 1.5:
+      self.releaseFirstAbility()
 
-  def endFirstAbility(self):
-    super().endFirstAbility()
+  def releaseFirstAbility(self):
+    super().releaseFirstAbility()
     self.speedLocked = False
 
   def activateSecondAbility(self):
@@ -692,7 +697,7 @@ class BarrelMan(Player):
 # POG CHARACTER
 
 class Pog(Player):
-  secondAbilityIsHeld = True
+  firstAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide):
     super().__init__(game, coords, playerSide)
@@ -701,21 +706,28 @@ class Pog(Player):
     self.jumpingPower = 25
     self.totalAirJumps = 4
 
+    # FIRST ABILITY
+    self.firstAbilityHeldTimer = 0
+    self.maxPogHoldTimer = 3
+
   def draw(self):
     super().draw(self.image)
 
   def activateFirstAbility(self):
     super().activateFirstAbility()
-    self.game.obstacles.append(PogProjectile(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self))
+    self.firstAbilityHeldTimer = time.time()
 
-  def activateSecondAbility(self, time=0, endable=False):
-    super().activateSecondAbility(time, endable)
-    print("A")
+  def pressedFirstAbility(self):
+    if time.time() - self.firstAbilityHeldTimer > self.maxPogHoldTimer:
+      self.releaseFirstAbility()
 
-  def releaseSecondAbility(self, time=0, endable=False):
-    return super().releaseSecondAbility(time, endable)
-    print("B")
+  def releaseFirstAbility(self):
+    super().releaseFirstAbility()
+    self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer))
 
+  def activateDownwardsAbility(self):
+    super().activateDownwardsAbility()
+    self.game.obstacles.append(PogBomb(self.game, self))
 
 
 
@@ -739,16 +751,19 @@ class Obstacle(GameObject):
     self.mustBeRemoved = False
     
 
-  def update(self, game, deltaT):
-    super().update(game, deltaT)
+  def update(self, game):
+    super().update(game)
     self.detectCollision()
     if self.timer != None:
-      self.updateTimer(deltaT)
+      self.updateTimer()
   
-  def updateTimer(self, deltaT):
+  def updateTimer(self):
     self.timer -= deltaT / 1000
     if self.timer <= 0:
-      self.mustBeRemoved = True
+      self.belowZeroTimer()
+
+  def belowZeroTimer(self):
+    self.mustBeRemoved = True
   
   def detectCollision(self):
     for player in self.detectHitPlayers:
@@ -767,8 +782,8 @@ class VeryLongSword(Obstacle):
     super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/verylongsword.png"), shotBy, 15)
     self.attachedToPlayer = shotBy
 
-  def update(self, game, deltaT):
-    super().update(game, deltaT)
+  def update(self, game):
+    super().update(game)
     if self.attachedToPlayer != None:
       self.x = self.attachedToPlayer.x + (self.attachedToPlayer.width / 2) - (self.width / 2)
       self.y = self.attachedToPlayer.y + self.attachedToPlayer.height
@@ -792,7 +807,7 @@ class Dagger(Obstacle):
   def onCollision(self, player):
     player.punched(self.immunePlayer, 6, 0.1)
 
-  def update(self, game, deltaT):
+  def update(self, game):
     if not self.stuck:
       self.angle = math.atan2(self.xDir, self.yDir) * (180 / math.pi)
       for platform in game.platforms:
@@ -802,7 +817,7 @@ class Dagger(Obstacle):
           self.xDir = 0
           self.yDir = 0
           self.stuck = True
-    super().update(game, deltaT)
+    super().update(game)
 
   def draw(self):
     WINDOW.blit(pygame.transform.rotate(self.img, self.angle), (self.x, self.y))
@@ -814,16 +829,94 @@ class Dagger(Obstacle):
 
 class PogProjectile(Obstacle):
 
-  def __init__(self, game, coords, shotBy):
-    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (12, 12)), shotBy, 5)
+  def __init__(self, game, shotBy, power):
+    self.power = power
+    self.size = 12 + (self.power * 20)
+
+    super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
+    self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4)
     if shotBy.direction > 0:
       self.xDir = 9
     else:
       self.xDir = -9
 
   def onCollision(self, player):
-    player.punched(self.immunePlayer, 12, 0.9)
+    player.punched(self.immunePlayer, 12 * (self.power + 1), 0.9 + (self.power * 0.3))
 
+class PogBomb(Obstacle):
+
+  def __init__(self, game, shotBy):
+    self.size = 36
+    self.bombImage1 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb1.png'), (self.size, self.size))
+    self.bombImage2 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb2.png'), (self.size, self.size))
+    self.explosionImage = AnimatedSprite(pygame.image.load('assets/images/characters/pog/pog_explosion.png'), (0, 0), 0.02, 100)
+    self.currImageFlipper = True
+    self.currImageFlipTimer = time.time()
+    self.isExploding = False
+    super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, shotBy, 3)
+    self.usesGravity = True
+
+  def update(self, game):
+    super().update(game)
+    if time.time() - self.currImageFlipTimer > 0.5:
+      self.currImageFlipper = not self.currImageFlipper
+      self.currImageFlipTimer = time.time()
+
+  def draw(self):
+    if not self.isExploding:
+      if self.currImageFlipper:
+        WINDOW.blit(self.bombImage1, (self.x, self.y))
+      else:
+        WINDOW.blit(self.bombImage2, (self.x, self.y))
+    else:
+      self.explosionImage.x = self.x + (self.width / 2) - (self.explosionImage.width / 2)
+      self.explosionImage.y = self.y + (self.height / 2) - (self.explosionImage.height / 2)
+      self.explosionImage.update()
+
+  def belowZeroTimer(self):
+    self.explosionImage.scale((350, 350))
+    self.isExploding = True
+    if self.explosionImage.frame == self.explosionImage.lastFrame:
+      self.mustBeRemoved = True
+
+
+
+
+
+
+# ANIMATED SPRITE
+
+class AnimatedSprite:
+
+  def __init__(self, sprite, coords, timePerFrame, frameHeight):
+    self.imgFull = sprite.convert_alpha() # Get sprite
+    self.timePerFrame = timePerFrame # Set preferred time per frame and how high the image actually should be
+    self.frameHeight = frameHeight
+
+    self.x, self.y = coords
+    self.width, self.height = self.imgFull.get_width(), self.frameHeight
+
+    self.timeAtFrame = 0 # Get amount of time image is at a frame
+
+    self.lastFrame = (self.imgFull.get_height() // self.frameHeight) - 1
+    self.frame = 0
+
+  def update(self):
+    self.timeAtFrame += deltaT / 1000
+    if self.timeAtFrame > self.timePerFrame:
+      self.frame += 1
+      self.timeAtFrame = 0
+      if self.frame > self.lastFrame:
+        self.frame = 0
+    self.draw()
+  
+  def draw(self):
+    WINDOW.blit(self.imgFull, (self.x, self.y), (0, self.frame * self.frameHeight, self.width, self.height))
+
+  def scale(self, scaling):
+    self.width, self.height = scaling
+    self.frameHeight = self.height
+    self.imgFull = pygame.transform.scale(self.imgFull, (self.width, self.height * (self.lastFrame + 1)))
 
 # ================================================================
 # ================================================================
@@ -834,6 +927,7 @@ class PogProjectile(Obstacle):
 # ================================================================
 
 currMenu = MainMenu()
+deltaT = 0
 
 while True:
   pygame.display.update() # Update display
@@ -902,4 +996,4 @@ while True:
       
 
 
-  currMenu.update(deltaT)
+  currMenu.update()
