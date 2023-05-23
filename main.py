@@ -716,7 +716,7 @@ class BarrelMan(Player):
 
   def releaseFirstAbility(self):
     super().releaseFirstAbility()
-    self.speedLocked = False
+    self.speedLocked = False # Allow player to move again
 
   def activateSecondAbility(self):
     if time.time() - self.daggerTimer > 3: # If dagger cooldown is passed
@@ -784,18 +784,19 @@ class Pog(Player):
 
   def releaseFirstAbility(self):
     super().releaseFirstAbility()
-    if time.time() - self.firstAbilityCooldownTimer >= 0.5:
-      self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer))
-      self.firstAbilityCooldownTimer = time.time()
+    if time.time() - self.firstAbilityCooldownTimer >= 0.5: # If firsy ability is teleased and the time since the last projectile was shot is greater than 0.5s
+      self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer)) # shoot projectile
+      self.firstAbilityCooldownTimer = time.time() # Reset ability timer
 
   def activateDownwardsAbility(self):
-    if not self.isBig:
-      self.game.obstacles.append(PogBomb(self.game, self))
+    if not self.isBig: # If the player is not big
+      self.game.obstacles.append(PogBomb(self.game, self)) # Add a PogBomb to the game
       return super().activateDownwardsAbility()
     return False
 
   def activateSecondAbility(self):
-    if not self.isBig:
+    # Switch Pog from being small/big and set its mobility variables to match the soze
+    if not self.isBig: 
       self.changeSize((80, 80))
       self.remainingAirJumps = 0
       self.totalAirJumps = 0
@@ -811,7 +812,7 @@ class Pog(Player):
     return super().activateSecondAbility()
 
   def changeSize(self, newDimensions):
-    super().changeSize(newDimensions)
+    super().changeSize(newDimensions) # Change size when Pog switches sizes
     self.image = pygame.transform.scale(self.image, newDimensions)
 
 
@@ -825,15 +826,17 @@ class Obstacle(GameObject):
   def __init__(self, game, coords, img, immunePlayer = None, timer = None):
     self.width, self.height = img.get_width(), img.get_height()
     super().__init__(coords, (self.width, self.height), img)
+    
+    # Set variables
     self.game = game
     self.immunePlayer = immunePlayer
     self.timer = timer
     self.detectHitPlayers = []
     self.currentlyHitPlayers = []
-    for player in game.players:
+    for player in game.players: # Loop through playet list, add all players except immune player to detectable players
       if player != self.immunePlayer:
         self.detectHitPlayers.append(player)
-    self.mustBeRemoved = False
+    self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
     
 
   def update(self, game):
