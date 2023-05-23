@@ -119,22 +119,27 @@ class MenuOption:
 class TransparentRectangle:
 
   def __init__(self, coords, dimensions, alpha, color, text = None):
+    # Set properties
     self.x, self.y = coords
     self.width, self.height = dimensions
+
+    # Create new surface
     self.surface = pygame.Surface(dimensions)
     self.surface.set_alpha(alpha)
     self.surface.fill(color)
+
+    # Set text
     self.text = text
 
   def draw(self):
-    WINDOW.blit(self.surface, (self.x, self.y))
-    if self.text != None:
+    WINDOW.blit(self.surface, (self.x, self.y)) # Put surface on window
+    if self.text != None: # If there is text, update the text
       self.text.update()
 
 
   def setText(self, text):
-    if self.text != None:
-      self.text.text = text
+    if self.text != None: # If there is text
+      self.text.text = text # Set text to be new text and update its coords
       self.text.x = self.x + (self.width / 2) - (self.text.font.size(self.text.text)[0] // 2)
       self.text.y = self.y + (self.height / 2) - (self.text.font.size(self.text.text)[1] // 2)
 
@@ -306,16 +311,17 @@ class Platform(GameObject):
 
   def __init__(self, coords, dimensions):
     super().__init__(coords, dimensions)
-    self.rect = pygame.rect.Rect(self.x, self.y, dimensions[0], dimensions[1])
+    self.rect = pygame.rect.Rect(self.x, self.y, dimensions[0], dimensions[1]) # Create rectangle for the platform
 
   def draw(self):
-    pygame.draw.rect(WINDOW, (241, 241, 241), self.rect)
+    pygame.draw.rect(WINDOW, (241, 241, 241), self.rect) # Draw the platform
     
     
 
 # PLAYER CLASS
 
 class Player(GameObject):
+  # Variables that tell whether the ability should be held or not
   firstAbilityIsHeld = False
   secondAbilityIsHeld = False
   ultAbilityIsHeld = False
@@ -327,7 +333,7 @@ class Player(GameObject):
     super().__init__(coords, (self.width, self.height))
     self.rect = pygame.rect.Rect(coords[0], coords[1], self.width, self.height)
     self.playerSide = playerSide # 'left' or 'right'
-    self.activeAbilities = {
+    self.activeAbilities = { # Create a dictionary of active abilities, showing if they are active and their times they are activef
       'first': False,
       'second': False,
       'down': False,
@@ -376,19 +382,21 @@ class Player(GameObject):
     if image == None:
       pygame.draw.rect(WINDOW, (127, 127, 127), self.rect) # Draw a rectangle, showing the hitbox of the player (DEBUG FEATURE)
     else:
-      flipHorizontally = True if self.direction < 0 else False
-      WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y))
-      maxHeight = WINDOW_SIZE[1] - 5 - self.height
+      flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
+      WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y)) # Put image on screen
+
+      # If the charactes is outside the shown screen:
       if self.x < -30 or self.x > WINDOW_SIZE[0] + 30 - self.width:
-        pointerRotation = 0
-        if self.x < -30:
+        maxHeight = WINDOW_SIZE[1] - 5 - self.height # Get maximum height the pointer can go up to
+        pointerRotation = 0 # Set pointer rotation (this is in degrees, not radians, because pygame takes in degrees)
+        if self.x < -30: # Rotate the pointer if the player is too much to the left of the screen (so it points left)
           pointerRotation = 180
-          imageCoords = (5, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2))))
+          imageCoords = (5, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Place the image to the left of the screen and at a y-position correlating to the actual y-position unless the character is too high or low on the screen
         else:
-          imageCoords = (WINDOW_SIZE[0] - 5 - self.width, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2))))
-        WINDOW.blit(pygame.transform.rotate(self.pointerImg, pointerRotation), imageCoords)
-        WINDOW.blit(pygame.transform.flip(pygame.transform.scale(image, (14, 14)), flipHorizontally, False), (imageCoords[0] + 9, imageCoords[1] + 9))
-      if self.shieldActive:
+          imageCoords = (WINDOW_SIZE[0] - 5 - self.width, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Same thing but pointer is on the right
+        WINDOW.blit(pygame.transform.rotate(self.pointerImg, pointerRotation), imageCoords) # Blit the image at the coords provided above
+        WINDOW.blit(pygame.transform.flip(pygame.transform.scale(image, (14, 14)), flipHorizontally, False), (imageCoords[0] + 9, imageCoords[1] + 9)) # Place the character image in the middle
+      if self.shieldActive: # Draw shield if shield is active
         WINDOW.blit(self.shieldImg, (self.x - 12, self.y - 12))
     
 
@@ -429,10 +437,10 @@ class Player(GameObject):
       self.ultControl = num1Tapped and self.xDir == 0
 
   def collideWithPlatforms(self, game):
-    self.inAir = True
-    for platform in game.platforms:
-      collisionInfo = util.rectangleCollision(self.rect, platform.rect)
-      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir >= 0:
+    self.inAir = True # Automatically set the player to be in the air
+    for platform in game.platforms: # Loop through platforms
+      collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get collision info for object
+      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir >= 0: # If bottom of player hits platform, run hitting ground function
         self.y = platform.rect.top - self.height
         self.yDir = 0
         self.inAir = False
@@ -446,9 +454,9 @@ class Player(GameObject):
   def detectControls(self):
 
     if self.firstAbilityIsHeld and self.activeAbilities['first']:
-      if self.firstAbilityControlHeld:
+      if self.firstAbilityControlHeld: # Keep running this function if the ability is supposed to be held and the key is still held
         self.pressedFirstAbility()
-      else:
+      else: # Run this function if the ability is supposed to be held and the key is released
         self.releaseFirstAbility()
     if self.secondAbilityIsHeld and self.activeAbilities['second']:
       print(self.secondAbilityControlHeld)
@@ -462,18 +470,18 @@ class Player(GameObject):
       else:
         self.releaseDownAbility()
 
-    if not self.speedLocked:
+    if not self.speedLocked: # If spped can change by user input (not speedlocked)
       if self.leftControl: # Move left if a is pressed
         self.direction = -1
-        if not self.inAir:
+        if not self.inAir: # Constant velocity if on ground
           self.xDir = -self.horizontalSpeed
-        elif self.xDir > -self.horizontalSpeed:
+        elif self.xDir > -self.horizontalSpeed: # Changing velocity if in air
           self.xDir -= 0.5 / self.weight
       elif self.rightControl: # Move right if d is pressed
         self.direction = 1
-        if not self.inAir:
+        if not self.inAir: # Constant velocity if on ground
           self.xDir = self.horizontalSpeed
-        elif self.xDir < self.horizontalSpeed:
+        elif self.xDir < self.horizontalSpeed: # Changing velocity if in air
           self.xDir += 0.5 / self.weight
       elif not self.inAir: # Stop moving horizontally if none are pressed
         self.xDir = 0
@@ -502,12 +510,11 @@ class Player(GameObject):
     else:
       self.attackBox = None
     
-    if self.shieldControl and self.xDir == 0 and self.yDir == 0 and time.time() - self.shieldStartTimer < 2 and not self.shieldButtonPressed:
-
-      self.shieldActive = True
+    if self.shieldControl and self.xDir == 0 and self.yDir == 0 and time.time() - self.shieldStartTimer < 2 and not self.shieldButtonPressed: # If shield is pressed, player is not moving, and shield cooldown timer has passed
+      self.shieldActive = True # Activate shield
     else:
-      self.shieldStartTimer = time.time()
-      self.shieldActive = False
+      self.shieldStartTimer = time.time() # Set shield timer to be current time
+      self.shieldActive = False # Turn off shield
       self.shieldButtonPressed = True
     if not self.shieldControl:
       self.shieldButtonPressed = False
@@ -515,17 +522,17 @@ class Player(GameObject):
 
 
   def punch(self):
-    if self.direction == 1:
+    if self.direction == 1: # Place an attack box in front of the player
       self.attackBox = pygame.rect.Rect(self.x + (self.width / 2), self.y - 16, (self.width / 2) + 24, self.height + 32)
     else:
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
 
   def changeSize(self, newDimensions):
-    previousWidth, previousHeight = self.width, self.height
-    self.width, self.height = newDimensions
-    self.x = self.x + (previousWidth / 2) - (self.width / 2)
+    previousWidth, previousHeight = self.width, self.height # Save previous sizes
+    self.width, self.height = newDimensions # Set new sizes
+    self.x = self.x + (previousWidth / 2) - (self.width / 2) # Set new x and y positions
     self.y = self.y + (previousHeight / 2) - (self.height / 2)
-    self.rect.width = self.width
+    self.rect.width = self.width # Set rectangle sizes
     self.rect.height = self.height
 
 
@@ -649,18 +656,19 @@ class Player(GameObject):
     self.activeAbilities['ult'] = False
 
   def punched(self, sourceCoords, damage, knockbackMultiplyer = 1):
-    mult = 1
-    angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0])
-    if not self.inAir:
-      if angle < math.pi * (1 / 4):
-        angle = math.pi * (1 / 4)
-      elif angle > math.pi * (3 / 4):
-        angle = math.pi * (3 / 4)
-      mult = -1
-    self.xDir = (math.cos(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
-    self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
-    self.percentage += damage
-    self.percentage = round(self.percentage, 1)
+    if not self.shieldActive: # If player shield is down
+      mult = 1
+      angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
+      if not self.inAir: # If the player is not in the air
+        if angle < math.pi * (1 / 4): # If hitting angle is too low or too high, set it so the player can lift off the ground
+          angle = math.pi * (1 / 4)
+        elif angle > math.pi * (3 / 4):
+          angle = math.pi * (3 / 4)
+        mult = -1 # Set y direction multiplier
+      self.xDir = (math.cos(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight # Set new x and y directions
+      self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
+      self.percentage += damage # Add to percentage
+      self.percentage = round(self.percentage, 1) # Round percentage
 
 
 
@@ -711,9 +719,9 @@ class BarrelMan(Player):
     self.speedLocked = False
 
   def activateSecondAbility(self):
-    if time.time() - self.daggerTimer > 3:
-      self.daggerTimer = time.time()
-      for i in range(8):
+    if time.time() - self.daggerTimer > 3: # If dagger cooldown is passed
+      self.daggerTimer = time.time() # Set cooldown timer
+      for i in range(8): # Create 8 daggers, each going a different direction
         angle = i * (math.pi / 4)
         self.game.obstacles.append(Dagger(self.game, (self.x, self.y), angle, self))
       return super().activateSecondAbility()
@@ -721,8 +729,9 @@ class BarrelMan(Player):
   
   def activateDownwardsAbility(self):
     super().activateDownwardsAbility()
-    self.game.obstacles.append(VeryLongSword(self.game, (self.x, self.y), self))
-    self.yDir = 15
+    self.game.obstacles.append(VeryLongSword(self.game, (self.x, self.y), self)) # Create a very long sword, which will stick to the player until it hits the ground
+    self.yDir = 15 # Set y-dir of player to be 15
+    self.remainingAirJumps = 0 # Make sure barrel man cannot double jump afterwards
 
 # POG CHARACTER
 
@@ -731,46 +740,53 @@ class Pog(Player):
 
   def __init__(self, game, coords, playerSide):
     super().__init__(game, coords, playerSide)
-    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height))
-    self.weight = 5
+    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height)) # Load normal image
+    self.weight = 5 # Set base stats
     self.jumpingPower = 25
     self.totalAirJumps = 4
 
     # FIRST ABILITY
+    self.firstAbilityCooldownTimer = 0
     self.firstAbilityHeldTimer = 0
-    self.maxPogHoldTimer = 3
+    self.maxPogHoldTimer = 4.5
 
     # SECOND ABILITY
     self.isBig = False
-    self.hitPlayers = []
+    self.hitPlayers = [] # Set players that this ability has hit
+    self.hitPlayersTimer = [] # set players that this abiolity cannot hit until timer is done
 
   def update(self, game):
     super().update(game)
-    if self.isBig:
-      for player in game.players:
-        if self != player:
-          if self.rect.colliderect(player.rect) and not player in self.hitPlayers:
-            player.punched((self.x, self.y), 37, 1.5)
-            self.hitPlayers.append(player)
-          elif player in self.hitPlayers:
-            self.hitPlayers.remove(player)
+    if self.isBig: # If player is big
+      for i in range(len(game.players)): # Loop through players using an index
+        player = game.players[i]
+        if self != player: # If the player is not themselves
+          if self.rect.colliderect(player.rect) and not player in self.hitPlayers: # If player hits Pog
+            player.punched((self.x, self.y), 19, 1.25) # Punch the player
+            self.hitPlayers.append(player) # Set player to be hit by Pog
+            self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
+          elif player in self.hitPlayers and time.time() - self.hitPlayersTimer[i] >= 0.5: # If the player is not hitting Pog and the cooldown timer has passed, remove both the player and the cooldown timer from their lists
+              self.hitPlayersTimer.pop(i)
+              self.hitPlayers.pop(i)
 
   def draw(self):
-    super().draw(self.image)
+    super().draw(self.image) # Draw Pog
 
   def activateFirstAbility(self):
-    if not self.isBig:
-      self.firstAbilityHeldTimer = time.time()
+    if not self.isBig: # If the player is not big
+      self.firstAbilityHeldTimer = time.time() # Set a timer for how long this is held down
       return super().activateFirstAbility()
     return False
 
   def pressedFirstAbility(self):
-    if time.time() - self.firstAbilityHeldTimer > self.maxPogHoldTimer:
+    if time.time() - self.firstAbilityHeldTimer > self.maxPogHoldTimer: # If the held down time reaches the maximum held down time
       self.releaseFirstAbility()
 
   def releaseFirstAbility(self):
     super().releaseFirstAbility()
-    self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer))
+    if time.time() - self.firstAbilityCooldownTimer >= 0.5:
+      self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer))
+      self.firstAbilityCooldownTimer = time.time()
 
   def activateDownwardsAbility(self):
     if not self.isBig:
@@ -848,7 +864,7 @@ class Obstacle(GameObject):
 class VeryLongSword(Obstacle):
 
   def __init__(self, game, coords, shotBy):
-    super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/verylongsword.png"), shotBy, 15)
+    super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/verylongsword.png"), shotBy, 6)
     self.attachedToPlayer = shotBy
 
   def update(self, game):
@@ -861,7 +877,7 @@ class VeryLongSword(Obstacle):
         self.y -= 10
 
   def onCollision(self, player):
-    player.punched((self.x, self.y), 23, 1.3)
+    player.punched((self.x, self.y), 11, 0.6)
 
 class Dagger(Obstacle):
 
@@ -900,7 +916,7 @@ class PogProjectile(Obstacle):
 
   def __init__(self, game, shotBy, power):
     self.power = power
-    self.size = 12 + (self.power * 20)
+    self.size = 12 + (self.power * 50)
 
     super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
     self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4)
