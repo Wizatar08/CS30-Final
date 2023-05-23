@@ -171,27 +171,27 @@ class Game:
     self.platforms = [
       Platform((100, 500), (200, 15)), Platform((500, 500), (200, 15)), Platform((250, 375), (300, 15)),
       Platform((50, 250), (250, 15)), Platform((500, 250), (250, 15)), Platform((150, 125), (500, 15)),
-    ]
-    self.players = []
-    if player1option == 0:
+    ] # Create level platforms
+    self.players = [] # Create list of players
+    if player1option == 0: # Set player 1 character
       self.players.append(BarrelMan(self, (100, 100), 'left'))
     elif player1option == 1:
       self.players.append(Pog(self, (100, 100), 'left'))
     else:
       self.players.append(Player(self, (100, 100), 'left'))
 
-    if player2option == 0:
+    if player2option == 0: # Set player 2 character
       self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
     elif player2option == 1:
       self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
     else:
       self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
 
-    self.obstacles = []
+    self.obstacles = [] # Create list of obstacles
  
-    self.percentageXSpacingDiff = (WINDOW_SIZE[0] - 200) / (len(self.players) - 1)
-    self.percentageRectangles = []
-    for i in range(len(self.players)):
+    self.percentageXSpacingDiff = (WINDOW_SIZE[0] - 200) / (len(self.players) - 1) # Set spacing between percentage box
+    self.percentageRectangles = [] # Create rectangles, putting the percentages of each player over top of them
+    for i in range(len(self.players)): # Add a transparent rectangle to the list for each player
       self.percentageRectangles.append(TransparentRectangle((50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 80), (100, 50), 127, PLAYER_COLORS[i], Text(TEXT_FONT, '0%')))
 
   def update(self):
@@ -209,27 +209,27 @@ class Game:
         if player.attackBox != None and player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
           hitPlayer.punched((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
     
-    removableObstacles = []
-    for obstacle in self.obstacles:
-      obstacle.update(self)
-      if obstacle.mustBeRemoved:
+    removableObstacles = [] # List of obstacles to remove (obstacles cannot be removed from the list when in the middle of looping through that list)
+    for obstacle in self.obstacles: # Update the obstacle
+      obstacle.update(self) 
+      if obstacle.mustBeRemoved: # If the obstacle should be removed, put it on the removable obstacles list
         removableObstacles.append(obstacle)
-    for obstacle in removableObstacles:
+    for obstacle in removableObstacles: # Remove any obstacles that should be removed
       self.obstacles.remove(obstacle)
   
-    self.drawPlayerPrecentages()
+    self.drawPlayerPrecentages() # Draw the player percentages and background rectangles
 
   def drawPlayerPrecentages(self):
-    for i in range(len(self.players)):
+    for i in range(len(self.players)): # Draw rectangle and text for each player
       self.percentageRectangles[i].setText(f"{self.players[i].percentage}%")
       self.percentageRectangles[i].draw()
 
   # Player actual hitbox collisions
   def hitPlayer(self, checkingPlayer):
-    for player in self.players:
-      if player != checkingPlayer and checkingPlayer.rect.colliderect(player.rect):
+    for player in self.players: # Loop through players
+      if player != checkingPlayer and checkingPlayer.rect.colliderect(player.rect): # If attack box hits another player, return the hit player
         return player
-    return None
+    return None # if no players are found, return nothing
 
     
 
@@ -240,49 +240,64 @@ class Game:
 class GameObject:
 
   def __init__(self, coords, dimensions, img = None):
+
+    # Set position and dimensions
     self.x, self.y = coords
     self.width, self.height = dimensions
+
+    # Set image
     self.img = img
+
+    # Set directions
     self.xDir, self.yDir = (0, 0)
+
+    # Set rectangle
     self.rect = pygame.rect.Rect(self.x, self.y, self.width, self.height)
+
+    # Set usage of gravity
     self.usesGravity = False
+
+    # Set if object is in the air
     self.inAir = True
 
   def update(self, game):
-    self.rect.update(self.x, self.y, self.width, self.height)
-    if self.usesGravity:
+    self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
+    if self.usesGravity: # if object uses gravity, apply gravity and, if this isn't a platform, detect if it hits a platform
       self.gravity()
       if not isinstance(self, Platform):
         self.collideWithPlatform(game)
-    self.move(deltaT)
-    self.draw()
+    self.move(deltaT) # move object
+    self.draw() # draw object
 
   def move(self, deltaT):
-    self.x += self.xDir * 15 / deltaT
+    self.x += self.xDir * 15 / deltaT # Change x and y positions based on time between frames and directions
     self.y += self.yDir * 15 / deltaT
 
   def draw(self):
-    WINDOW.blit(self.img, (self.x, self.y))
+    WINDOW.blit(self.img, (self.x, self.y)) # Draw the image
   
   def collideWithPlatform(self, game):
     self.inAir = True
     for platform in game.platforms:
-      collisionInfo = util.rectangleCollision(self.rect, platform.rect)
-      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0:
-        self.hitPlatformFromBottom(platform)
-      if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0:
-        self.y -= self.yDir
+      collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get all the collision info for platform collision
+      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0: # If the object is falling and hits the top of a platform (bottom of object hits platform)
+        self.hitPlatformFromBottom(platform) # Run code to hit platform
+      if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0: # If the object is going upwards and htis the bottom of a platform
+        self.y -= self.yDir # Stop upwards movement
         self.yDir = 0
-      if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
-        self.x -= self.xDir
+      if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0): # If object hits side of platform
+        self.x -= self.xDir # Stop the object
 
   def gravity(self):
     self.yDir += 0.2 # Add 2 to the vertical movement of the character going down
 
-  def hitPlatformFromBottom(self, platform):
-    self.y = platform.rect.top - self.height
-    self.yDir = 0
-    self.inAir = False
+  def hitPlatformFromBottom(self, platform): # Code used to hit platform from the bottom
+    self.y = platform.rect.top - self.height # Set y position so bottom of object is touching the platform
+    if self.yDir > 20: # Bounce object 
+      self.yDir *= -1
+    else:
+      self.yDir = 0 # Stop the object from moving
+      self.inAir = False
 
 
 # PLATFORM CLASS
@@ -895,7 +910,7 @@ class PogProjectile(Obstacle):
       self.xDir = -9
 
   def onCollision(self, player):
-    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power + 1), 0.9 + (self.power * 0.3))
+    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3))
 
 class PogBomb(Obstacle):
 
