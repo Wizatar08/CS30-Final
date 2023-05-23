@@ -207,7 +207,7 @@ class Game:
     for player in self.players:
       for hitPlayer in self.players:
         if player.attackBox != None and player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
-          hitPlayer.punched(player, 10)
+          hitPlayer.punched((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
     
     removableObstacles = []
     for obstacle in self.obstacles:
@@ -471,20 +471,16 @@ class Player(GameObject):
       elif not self.inAir: # Jump if on surface
         self.yDir = -self.jumpingPower / self.weight
     if self.downControl and self.inAir: # Use downwards ability if s is pressed
-      self.activateDownwardsAbility()
-      if self.downwardsAbilityIsHeld:
+      if self.activateDownwardsAbility() and self.downwardsAbilityIsHeld:
         self.activeAbilities['down'] = True
     elif self.firstAbilityControl and self.activeAbilities['first'] == False: # Use first ability if first ability key is pressed
-      self.activateFirstAbility()
-      if self.firstAbilityIsHeld:
+      if self.activateFirstAbility() and self.firstAbilityIsHeld:
         self.activeAbilities['first'] = True
     elif self.secondAbilityControl and self.activeAbilities['second'] == False: # Use second ability if second ability key is pressed
-      self.activateSecondAbility()
-      if self.secondAbilityIsHeld:
+      if self.activateSecondAbility() and self.secondAbilityIsHeld:
         self.activeAbilities['second'] = True
     elif self.ultControl and self.activeAbilities['ult'] == False: # Use second ability if second ability key is pressed
-      self.activateUltAbility()
-      if self.ultAbilityIsHeld:
+      if self.activateUltAbility() and self.ultAbilityIsHeld:
         self.activeAbilities['ult'] = True
     if self.punchControl:
       self.punch()
@@ -508,6 +504,14 @@ class Player(GameObject):
       self.attackBox = pygame.rect.Rect(self.x + (self.width / 2), self.y - 16, (self.width / 2) + 24, self.height + 32)
     else:
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
+
+  def changeSize(self, newDimensions):
+    previousWidth, previousHeight = self.width, self.height
+    self.width, self.height = newDimensions
+    self.x = self.x + (previousWidth / 2) - (self.width / 2)
+    self.y = self.y + (previousHeight / 2) - (self.height / 2)
+    self.rect.width = self.width
+    self.rect.height = self.height
 
 
   def updateAbilities(self):
@@ -546,6 +550,7 @@ class Player(GameObject):
     self.firstAbilityControl = False
     if time > 0 and not self.firstAbilityIsHeld:
       self.activeAbilities['first'] = [time * 1000, endable]
+    return True
 
   def pressedFirstAbility(self): # IF ABILITY IS HELD: RUN WHILE ABILITY BUTTON IS PRESSED
     pass;
@@ -565,6 +570,9 @@ class Player(GameObject):
   # SECOND ABILITY
   def activateSecondAbility(self, time = 0, endable = False):
     self.secondAbilityControl = False
+    if time > 0 and not self.secondAbilityIsHeld:
+      self.activeAbilities['second'] = [time * 1000, endable]
+    return True
 
   def pressedSecondAbility(self):
     pass;
@@ -584,6 +592,9 @@ class Player(GameObject):
   # DOWNWARDS ABILITY
   def activateDownwardsAbility(self, time = 0, endable = False):
     self.downControl = False
+    if time > 0 and not self.downwardsAbilityIsHeld:
+      self.activeAbilities['down'] = [time * 1000, endable]
+    return True
     
   def pressedDownAbility(self):
     pass;
@@ -603,7 +614,9 @@ class Player(GameObject):
   # ULT ABILITY
   def activateUltAbility(self, time = 0, endable = False):
     self.ultControl = False
-    pass
+    if time > 0 and not self.secondAbilityIsHeld:
+      self.activeAbilities['ult'] = [time * 1000, endable]
+    return True
   
   def pressedUltAbility(self):
     pass;
@@ -620,9 +633,9 @@ class Player(GameObject):
   def endUltABility(self):
     self.activeAbilities['ult'] = False
 
-  def punched(self, attacker, damage, knockbackMultiplyer = 1):
+  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1):
     mult = 1
-    angle = math.atan2(self.y - attacker.y, self.x - attacker.x)
+    angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0])
     if not self.inAir:
       if angle < math.pi * (1 / 4):
         angle = math.pi * (1 / 4)
@@ -664,16 +677,17 @@ class BarrelMan(Player):
 
   def activateFirstAbility(self):
     if self.xDir != 0: # If there is movement on the x-plane
-      super().activateFirstAbility() # Activate first ability
       self.xDir = (self.xDir // abs(self.xDir)) * 10 # Set speed
       self.speedLocked = True # Lock speed
       self.rollTimer = time.time()
+      return super().activateFirstAbility() # Activate first ability
+    return False
   
   def pressedFirstAbility(self):
     hitPlayer = self.game.hitPlayer(self) # Find a hit player
     if hitPlayer != None: # If there is a hit player
       self.releaseFirstAbility() # End the ability
-      hitPlayer.punched(self, 36, 1.8) # Launch player
+      hitPlayer.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 36, 1.8) # Launch player
     if time.time() - self.rollTimer > 1.5:
       self.releaseFirstAbility()
 
@@ -683,11 +697,12 @@ class BarrelMan(Player):
 
   def activateSecondAbility(self):
     if time.time() - self.daggerTimer > 3:
-      super().activateSecondAbility()
       self.daggerTimer = time.time()
       for i in range(8):
         angle = i * (math.pi / 4)
         self.game.obstacles.append(Dagger(self.game, (self.x, self.y), angle, self))
+      return super().activateSecondAbility()
+    return False
   
   def activateDownwardsAbility(self):
     super().activateDownwardsAbility()
@@ -710,12 +725,29 @@ class Pog(Player):
     self.firstAbilityHeldTimer = 0
     self.maxPogHoldTimer = 3
 
+    # SECOND ABILITY
+    self.isBig = False
+    self.hitPlayers = []
+
+  def update(self, game):
+    super().update(game)
+    if self.isBig:
+      for player in game.players:
+        if self != player:
+          if self.rect.colliderect(player.rect) and not player in self.hitPlayers:
+            player.punched((self.x, self.y), 37, 1.5)
+            self.hitPlayers.append(player)
+          elif player in self.hitPlayers:
+            self.hitPlayers.remove(player)
+
   def draw(self):
     super().draw(self.image)
 
   def activateFirstAbility(self):
-    super().activateFirstAbility()
-    self.firstAbilityHeldTimer = time.time()
+    if not self.isBig:
+      self.firstAbilityHeldTimer = time.time()
+      return super().activateFirstAbility()
+    return False
 
   def pressedFirstAbility(self):
     if time.time() - self.firstAbilityHeldTimer > self.maxPogHoldTimer:
@@ -726,8 +758,30 @@ class Pog(Player):
     self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer))
 
   def activateDownwardsAbility(self):
-    super().activateDownwardsAbility()
-    self.game.obstacles.append(PogBomb(self.game, self))
+    if not self.isBig:
+      self.game.obstacles.append(PogBomb(self.game, self))
+      return super().activateDownwardsAbility()
+    return False
+
+  def activateSecondAbility(self):
+    if not self.isBig:
+      self.changeSize((80, 80))
+      self.remainingAirJumps = 0
+      self.totalAirJumps = 0
+      self.jumpingPower = 75
+      self.weight = 12
+    else:
+      self.changeSize((24, 24))
+      self.totalAirJumps = 5
+      self.remainingAirJumps = 5
+      self.jumpingPower = 24
+      self.weight = 5
+    self.isBig = not self.isBig
+    return super().activateSecondAbility()
+
+  def changeSize(self, newDimensions):
+    super().changeSize(newDimensions)
+    self.image = pygame.transform.scale(self.image, newDimensions)
 
 
 
@@ -792,7 +846,7 @@ class VeryLongSword(Obstacle):
         self.y -= 10
 
   def onCollision(self, player):
-    player.punched(self.immunePlayer, 23, 1.3)
+    player.punched((self.x, self.y), 23, 1.3)
 
 class Dagger(Obstacle):
 
@@ -805,7 +859,7 @@ class Dagger(Obstacle):
     self.stuck = False
 
   def onCollision(self, player):
-    player.punched(self.immunePlayer, 6, 0.1)
+    player.punched((self.x, self.y), 6, 0.1)
 
   def update(self, game):
     if not self.stuck:
@@ -841,7 +895,7 @@ class PogProjectile(Obstacle):
       self.xDir = -9
 
   def onCollision(self, player):
-    player.punched(self.immunePlayer, 12 * (self.power + 1), 0.9 + (self.power * 0.3))
+    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power + 1), 0.9 + (self.power * 0.3))
 
 class PogBomb(Obstacle):
 
@@ -853,8 +907,9 @@ class PogBomb(Obstacle):
     self.currImageFlipper = True
     self.currImageFlipTimer = time.time()
     self.isExploding = False
-    super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, shotBy, 3)
+    super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, None, 3)
     self.usesGravity = True
+    self.explosionCircle = None
 
   def update(self, game):
     super().update(game)
@@ -875,9 +930,23 @@ class PogBomb(Obstacle):
 
   def belowZeroTimer(self):
     self.explosionImage.scale((350, 350))
+    if not self.isExploding:
+      self.explosionCircle = util.Circle((self.x, self.y), self.explosionImage.width / 2)
     self.isExploding = True
     if self.explosionImage.frame == self.explosionImage.lastFrame:
       self.mustBeRemoved = True
+
+  def detectCollision(self):
+    if self.explosionCircle != None:
+      for player in self.detectHitPlayers:
+        if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
+          self.onCollision(player)
+          self.currentlyHitPlayers.append(player)
+        elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
+          self.currentlyHitPlayers.remove(player)
+
+  def onCollision(self, player):
+    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3)
 
 
 
@@ -958,6 +1027,7 @@ while True:
 
   # Player 2 tapped keys
   num1Tapped, num2Tapped, num3Tapped = False, False, False
+  
   
   for event in pygame.event.get():
     if event.type == gameGlobals.QUIT: # If the user wants to quit game, shut down python and system operations

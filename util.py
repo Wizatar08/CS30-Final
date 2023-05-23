@@ -1,3 +1,5 @@
+import math
+
 # Variables used to see which side something collides on
 COLLIDE = 0;
 COLLIDE_TOP = 1;
@@ -21,3 +23,26 @@ def rectangleCollision(rect1, rect2):
     elif lowestDelta == deltaLeft:
       return True, False, False, False, True
   return False, False, False, False, False
+
+
+def rectangleCircleCollision(rect, circle):
+    rectCenterX = rect.x + (rect.width / 2)
+    rectCenterY = rect.y + (rect.height / 2)
+
+    centerDistanceX = abs(circle.x - rectCenterX)
+    centerDistanceY = abs(circle.y - rectCenterY)
+
+    if centerDistanceX > rect.width / 2 + circle.radius or centerDistanceY > rect.height /2 + circle.radius:
+        return False
+    if centerDistanceX <= rect.width / 2 or centerDistanceY <= rect.height / 2:
+        return True
+    rectCornerX = centerDistanceX - rect.width / 2
+    rectCornerY = centerDistanceY - rect.height / 2
+    cornerDistance = math.sqrt(rectCornerX ** 2 + rectCornerY ** 2)
+    return cornerDistance <= circle.radius
+
+class Circle:
+   
+   def __init__(self, coords, radius):
+      self.x, self.y = coords
+      self.radius = radius
