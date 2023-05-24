@@ -29,8 +29,8 @@ class MainMenu:
     standardMenuWidth = 512
     self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "START")
     self.menuOptions = [
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERRORCUBE"),
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERRORCUBE"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERR://23¤Y%/"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERR://23¤Y%/"),
       self.startMenuOption
     ] # Create menu options
     self.currentIndex = 0
@@ -818,6 +818,9 @@ class Pog(Player):
     self.hitPlayers = [] # Set players that this ability has hit
     self.hitPlayersTimer = [] # set players that this ability cannot hit until timer is done
 
+    # DOWN ABILITY
+    self.releasedBomb = False
+
   def update(self, game) -> None:
     super().update(game)
     if self.isBig: # If player is big
@@ -828,9 +831,13 @@ class Pog(Player):
             player.punched((self.x, self.y), 19, 1.25) # Punch the player
             self.hitPlayers.append(player) # Set player to be hit by Pog
             self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
-          elif player in self.hitPlayers and time.time() - self.hitPlayersTimer[i] >= 0.5: # If the player is not hitting Pog and the cooldown timer has passed, remove both the player and the cooldown timer from their lists
-            self.hitPlayersTimer.pop(i)
-            self.hitPlayers.pop(i)
+          else:
+            for j in range(len(self.hitPlayers)):
+              if player in self.hitPlayers and time.time() - self.hitPlayersTimer[j] >= 0.5: # If the player is not hitting Pog and the cooldown timer has passed, remove both the player and the cooldown timer from their lists
+                self.hitPlayersTimer.pop(j)
+                self.hitPlayers.pop(j)
+    if not self.inAir:
+      self.releasedBomb = False
 
   def draw(self) -> None:
     super().draw(self.image) # Draw Pog
@@ -852,8 +859,10 @@ class Pog(Player):
       self.firstAbilityCooldownTimer = time.time() # Reset ability timer
 
   def activateDownwardsAbility(self) -> bool:
-    if not self.isBig: # If the player is not big
+    if not self.isBig and not self.releasedBomb: # If the player is not big
       self.game.obstacles.append(PogBomb(self.game, self)) # Add a PogBomb to the game
+      self.yDir -= 5
+      self.releasedBomb = True
       return super().activateDownwardsAbility()
     return False
 
@@ -895,9 +904,28 @@ class ErrorPlayer(Player):
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
     self.mainImage = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
+    self.glitchedImage = ChangingSprite(pygame.image.load('assets/images/characters/error/green_code.png'), (0, 0), (24, 24), 0.2)
+
+    # DOWN ABILITY
+    self.downGlitch = False
+
+  def update(self, game) -> None:
+    if not self.inAir:
+      self.downGlitch = False
+    super().update(game)
 
   def draw(self) -> None:
-    super().draw(self.mainImage)
+    if self.downGlitch:
+      self.glitchedImage.x = self.x
+      self.glitchedImage.y = self.y
+      self.glitchedImage.update()
+    else:
+      super().draw(self.mainImage)
+
+  def activateDownwardsAbility(self) -> bool:
+    self.downGlitch = True
+    self.yDir = 15
+    return super().activateDownwardsAbility()
 
 
 
@@ -915,7 +943,7 @@ class Obstacle(GameObject):
     self.timer = timer
     self.detectHitPlayers = []
     self.currentlyHitPlayers = []
-    for player in game.players: # Loop through playet list, add all players except immune player to detectable players
+    for player in game.players: # Loop through player list, add all players except immune player to detectable players
       if player != self.immunePlayer:
         self.detectHitPlayers.append(player)
     self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
@@ -1126,6 +1154,10 @@ class ChangingSprite:
   def changeSpritePosition(self):
     self.imagePosX = random.randint(0, self.fullImage.get_width() - self.width)
     self.imagePosY = random.randint(0, self.fullImage.get_height() - self.height)
+
+  def scale(self, scaling) -> None:
+    self.fullImage = pygame.transform.scale(self.fullImage, ((self.fullImage.get_width() / self.width) * scaling[0], (self.fullImage.get_height() / self.height) * scaling[1]))
+    self.width, self.height = scaling
   
 
 # ================================================================
