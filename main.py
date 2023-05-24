@@ -1,4 +1,4 @@
-import pygame, sys, util, time, math
+import pygame, sys, util, time, math, random
 import pygame.locals as gameGlobals
 
 pygame.init() # Initialize pygame
@@ -29,14 +29,14 @@ class MainMenu:
     standardMenuWidth = 512
     self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "START")
     self.menuOptions = [
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: dfjsbgfjs"),
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: dfjsbgfjs"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERRORCUBE"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERRORCUBE"),
       self.startMenuOption
     ] # Create menu options
     self.currentIndex = 0
     
 
-  def update(self):
+  def update(self) -> None:
     for i in range(len(self.menuOptions)): # Loop through all menu options
       self.menuOptions[i].isSelected = i == self.currentIndex # If the current index is on it, say that this is selected
       self.menuOptions[i].update() # Update
@@ -46,7 +46,7 @@ class MainMenu:
       global currMenu
       currMenu = Game(self.menuOptions[0].currentIndex, self.menuOptions[1].currentIndex)
 
-  def detectKey(self):
+  def detectKey(self) -> None:
     if downTapped: # Loop down menu option if down is pressed
       self.currentIndex += 1
       if self.currentIndex > len(self.menuOptions) - 1:
@@ -79,7 +79,7 @@ class MenuOption:
     self.rightArrow.x = self.coords[0] + self.dimensions[0] - self.font.size(self.rightArrow.text)[0] - 20
     self.rightArrow.y = self.coords[1] + (self.dimensions[1] // 2) - (self.font.size(self.rightArrow.text)[1] // 2)
 
-  def update(self):
+  def update(self) -> None:
     self.draw() # Continually draw the selector
     self.text.update() # Update all text
     if self.usesArrows == True and self.isSelected:
@@ -88,7 +88,7 @@ class MenuOption:
     if self.isSelected == True: # If this menu option is selected, detect if key is pressed
       self.detectKey()
 
-  def detectKey(self):
+  def detectKey(self) -> None:
     if self.usesArrows == True: # If the menu option requires the use of arrow keys
       if rightTapped: # Loop forwards through menu options if right is tapped
         self.currentIndex += 1
@@ -105,12 +105,12 @@ class MenuOption:
     else: # If this is a menu option where space tap is needed, set the space tap variable to be whether space is tapped
       self.spaceTapped = spaceTapped
 
-  def updateText(self): # Update text and coords when it changes
+  def updateText(self) -> None: # Update text and coords when it changes
     textSize = self.font.size(self.textList[self.currentIndex])
     self.text.x = self.coords[0] + (self.dimensions[0] // 2) - (textSize[0] // 2) # Center text on box
     self.text.y = self.coords[1] + (self.dimensions[1] // 2) - (textSize[1] // 2)
 
-  def draw(self):
+  def draw(self) -> None:
     if self.isSelected: # Draw rectangles, different shade of grey depending on if this menu otpion is selected or not
       pygame.draw.rect(WINDOW, (127, 127, 127), self.outlineRect)
     else:
@@ -134,13 +134,13 @@ class TransparentRectangle:
     # Set t4ext to center rectangle
     self.setText(self.text.text)
 
-  def draw(self):
+  def draw(self) -> None:
     WINDOW.blit(self.surface, (self.x, self.y)) # Put surface on window
     if self.text != None: # If there is text, update the text
       self.text.update()
 
 
-  def setText(self, text):
+  def setText(self, text) -> None:
     if self.text != None: # If there is text
       self.text.text = text # Set text to be new text and update its coords
       self.text.x = self.x + (self.width / 2) - (self.text.font.size(self.text.text)[0] // 2)
@@ -157,7 +157,7 @@ class Text:
     self.bgColor = bgColor # Set background color of text
     self.show = True # Set text to be shown
 
-  def update(self):
+  def update(self) -> None:
     renderer = self.font.render(self.text, True, self.textColor) # Render text
     if self.bgColor != None: # If the background color is not None, add the background color
       renderer = self.font.render(self.text, True, self.textColor, self.bgColor) 
@@ -185,6 +185,8 @@ class Game:
       self.players.append(BarrelMan(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
     elif player1option == 1:
       self.players.append(Pog(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
+    elif player1option == 2:
+      self.players.append(ErrorPlayer(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
     else:
       self.players.append(Player(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
 
@@ -192,6 +194,8 @@ class Game:
       self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
     elif player2option == 1:
       self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
+    elif player2option == 2:
+      self.players.append(ErrorPlayer(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
     else:
       self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
 
@@ -206,7 +210,7 @@ class Game:
         Text(TEXT_FONT_SMALL, 'Stocks: 3', (50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 30), PLAYER_COLORS[i])
       ]
 
-  def update(self):
+  def update(self) -> None:
     # Update platforms
     for platform in self.platforms:
       platform.update(self)
@@ -231,19 +235,19 @@ class Game:
   
     self.drawPlayerStats() # Draw the player percentages and background rectangles
 
-  def drawPlayerStats(self):
+  def drawPlayerStats(self) -> None:
     for player in self.players: # Draw rectangle and text for each player
       self.statDisplay[player][0].draw()
       self.statDisplay[player][1].update()
 
-  def setPlayerPercentage(self, player, percentage):
+  def setPlayerPercentage(self, player, percentage) -> None:
     self.statDisplay[player][0].setText(f'{percentage}%')
 
-  def setPlayerStocks(self, player, stocks):
+  def setPlayerStocks(self, player, stocks) -> None:
     self.statDisplay[player][1].text = f'Stocks: {stocks}'
 
   # Player actual hitbox collisions
-  def hitPlayer(self, checkingPlayer):
+  def hitPlayer(self, checkingPlayer) -> bool:
     for player in self.players: # Loop through players
       if player != checkingPlayer and checkingPlayer.rect.colliderect(player.rect): # If attack box hits another player, return the hit player
         return player
@@ -278,7 +282,7 @@ class GameObject:
     # Set if object is in the air
     self.inAir = True
 
-  def update(self, game):
+  def update(self, game) -> None:
     self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
     if self.usesGravity: # if object uses gravity, apply gravity and, if this isn't a platform, detect if it hits a platform
       self.gravity()
@@ -287,14 +291,14 @@ class GameObject:
     self.move(deltaT) # move object
     self.draw() # draw object
 
-  def move(self, deltaT):
+  def move(self, deltaT) -> None:
     self.x += self.xDir * 15 / deltaT # Change x and y positions based on time between frames and directions
     self.y += self.yDir * 15 / deltaT
 
-  def draw(self):
+  def draw(self) -> None:
     WINDOW.blit(self.img, (self.x, self.y)) # Draw the image
   
-  def collideWithPlatform(self, game):
+  def collideWithPlatform(self, game) -> None:
     self.inAir = True
     for platform in game.platforms:
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get all the collision info for platform collision
@@ -306,10 +310,10 @@ class GameObject:
       if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0): # If object hits side of platform
         self.x -= self.xDir # Stop the object
 
-  def gravity(self):
+  def gravity(self) -> None:
     self.yDir += 0.2 # Add 2 to the vertical movement of the character going down
 
-  def hitPlatformFromBottom(self, platform): # Code used to hit platform from the bottom
+  def hitPlatformFromBottom(self, platform) -> None: # Code used to hit platform from the bottom
     self.y = platform.rect.top - self.height # Set y position so bottom of object is touching the platform
     if self.yDir > 20: # Bounce object 
       self.yDir *= -1
@@ -326,7 +330,7 @@ class Platform(GameObject):
     super().__init__(coords, dimensions)
     self.rect = pygame.rect.Rect(self.x, self.y, dimensions[0], dimensions[1]) # Create rectangle for the platform
 
-  def draw(self):
+  def draw(self) -> None:
     pygame.draw.rect(WINDOW, (241, 241, 241), self.rect) # Draw the platform
     
     
@@ -397,7 +401,7 @@ class Player(GameObject):
     self.spawnCoords = coords
 
 
-  def draw(self, image = None):
+  def draw(self, image = None) -> None:
     if image == None:
       pygame.draw.rect(WINDOW, (127, 127, 127), self.rect) # Draw a rectangle, showing the hitbox of the player (DEBUG FEATURE)
     else:
@@ -425,7 +429,7 @@ class Player(GameObject):
     
 
 
-  def update(self, game): # Update every frame
+  def update(self, game) -> None: # Update every frame
     self.collideWithPlatforms(game) # Check collisions with platforms
     self.detectIfOutOfBounds()
     self.updateControls()
@@ -433,7 +437,7 @@ class Player(GameObject):
     self.detectControls()
     self.updateAbilities()
 
-  def updateControls(self): # Detect specific keys to be tapped or pressed, determined by which side of the keyboard the player is using
+  def updateControls(self) -> None: # Detect specific keys to be tapped or pressed, determined by which side of the keyboard the player is using
     if self.playerSide == 'left':
       self.leftControl = aPressed
       self.rightControl = dPressed
@@ -461,7 +465,7 @@ class Player(GameObject):
       self.punchControl = num1Tapped
       self.ultControl = num1Tapped and self.xDir == 0
 
-  def collideWithPlatforms(self, game):
+  def collideWithPlatforms(self, game) -> None:
     self.inAir = True # Automatically set the player to be in the air
     for platform in game.platforms: # Loop through platforms
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get collision info for object
@@ -476,7 +480,7 @@ class Player(GameObject):
       if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
         self.x -= self.xDir
 
-  def detectControls(self):
+  def detectControls(self) -> None:
 
     if self.firstAbilityIsHeld and self.activeAbilities['first']:
       if self.firstAbilityControlHeld: # Keep running this function if the ability is supposed to be held and the key is still held
@@ -546,22 +550,23 @@ class Player(GameObject):
     
 
 
-  def punch(self):
+  def punch(self) -> None:
     if self.direction == 1: # Place an attack box in front of the player
       self.attackBox = pygame.rect.Rect(self.x + (self.width / 2), self.y - 16, (self.width / 2) + 24, self.height + 32)
     else:
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
 
-  def detectIfOutOfBounds(self):
+  def detectIfOutOfBounds(self) -> None:
     if self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000: # If the player's coords are out of bounds
       self.x, self.y = self.spawnCoords # Reset their position
       self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
       self.stocks -= 1 # Remove one from their stocks
       self.percentage = 0 # Set their percentages to be equal to 0
+      self.game.statDisplay[self][0].setText(f'{self.percentage}%')
       self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
       self.resetAbilities() # Reset abilties
 
-  def changeSize(self, newDimensions):
+  def changeSize(self, newDimensions) -> None:
     previousWidth, previousHeight = self.width, self.height # Save previous sizes
     self.width, self.height = newDimensions # Set new sizes
     self.x = self.x + (previousWidth / 2) - (self.width / 2) # Set new x and y positions
@@ -570,7 +575,7 @@ class Player(GameObject):
     self.rect.height = self.height
 
 
-  def updateAbilities(self):
+  def updateAbilities(self) -> None:
 
     # FIRST ABILITY UPDATE
     if type(self.activeAbilities['first']) == list:
@@ -602,98 +607,98 @@ class Player(GameObject):
     
 
   # FIRST ABILITY:
-  def activateFirstAbility(self, time = 0, endable = False): # TAP OR BEGIN PRESSING ABILITY
+  def activateFirstAbility(self, time = 0, endable = False) -> bool: # TAP OR BEGIN PRESSING ABILITY
     self.firstAbilityControl = False
     if time > 0 and not self.firstAbilityIsHeld:
       self.activeAbilities['first'] = [time * 1000, endable]
     return True
 
-  def pressedFirstAbility(self): # IF ABILITY IS HELD: RUN WHILE ABILITY BUTTON IS PRESSED
+  def pressedFirstAbility(self) -> None: # IF ABILITY IS HELD: RUN WHILE ABILITY BUTTON IS PRESSED
     pass;
 
-  def releaseFirstAbility(self, time = 0, endable = False): # IF ABILITY IS HELD: RUN ONCE ABILITY BUTTON IS RELEASED
+  def releaseFirstAbility(self, time = 0, endable = False) -> None: # IF ABILITY IS HELD: RUN ONCE ABILITY BUTTON IS RELEASED
     if time > 0 and not self.firstAbilityIsHeld:
       self.activeAbilities['first'] = [time * 1000, endable]
     else:
       self.activeAbilities['first'] = False
   
-  def duringFirstAbility(self): # IF ABILITY IS TIMED: RUN WHILE ABILITY IS ACTIVE
+  def duringFirstAbility(self) -> bool: # IF ABILITY IS TIMED: RUN WHILE ABILITY IS ACTIVE
     return False
   
-  def endFirstAbility(self): # IF ABILITY IS TIMED: RUN WHEN ABILITY ENDS
+  def endFirstAbility(self) -> None: # IF ABILITY IS TIMED: RUN WHEN ABILITY ENDS
     self.activeAbilities['first'] = False
 
   # SECOND ABILITY
-  def activateSecondAbility(self, time = 0, endable = False):
+  def activateSecondAbility(self, time = 0, endable = False) -> bool:
     self.secondAbilityControl = False
     if time > 0 and not self.secondAbilityIsHeld:
       self.activeAbilities['second'] = [time * 1000, endable]
     return True
 
-  def pressedSecondAbility(self):
+  def pressedSecondAbility(self) -> None:
     pass;
 
-  def releaseSecondAbility(self, time = 0, endable = False):
+  def releaseSecondAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.secondAbilityIsHeld:
       self.activeAbilities['second'] = [time * 1000, endable]
     else:
       self.activeAbilities['second'] = False
   
-  def duringSecondAbility(self):
+  def duringSecondAbility(self) -> None:
     return False
   
-  def endSecondAbility(self):
+  def endSecondAbility(self) -> None:
     self.activeAbilities['second'] = False
   
   # DOWNWARDS ABILITY
-  def activateDownwardsAbility(self, time = 0, endable = False):
+  def activateDownwardsAbility(self, time = 0, endable = False) -> bool:
     self.downControl = False
     if time > 0 and not self.downwardsAbilityIsHeld:
       self.activeAbilities['down'] = [time * 1000, endable]
     return True
     
-  def pressedDownAbility(self):
+  def pressedDownAbility(self) -> None:
     pass;
 
-  def releaseDownAbility(self, time = 0, endable = False):
+  def releaseDownAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.downwardsAbilityIsHeld:
       self.activeAbilities['down'] = [time * 1000, endable]
     else:
       self.activeAbilities['down'] = False
   
-  def duringDownAbility(self):
+  def duringDownAbility(self) -> None:
     return False
   
-  def endDownAbility(self):
+  def endDownAbility(self) -> None:
     self.activeAbilities['down'] = False
   
   # ULT ABILITY
-  def activateUltAbility(self, time = 0, endable = False):
+  def activateUltAbility(self, time = 0, endable = False) -> bool:
     self.ultControl = False
     if time > 0 and not self.secondAbilityIsHeld:
       self.activeAbilities['ult'] = [time * 1000, endable]
     return True
   
-  def pressedUltAbility(self):
+  def pressedUltAbility(self) -> None:
     pass;
 
-  def releaseUltAbility(self, time = 0, endable = False):
+  def releaseUltAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.ultAbilityIsHeld:
       self.activeAbilities['ult'] = [time * 1000, endable]
     else:
       self.activeAbilities['ult'] = False
   
-  def duringUltAbility(self):
+  def duringUltAbility(self) -> bool:
     return False
   
-  def endUltABility(self):
+  def endUltABility(self) -> None:
     self.activeAbilities['ult'] = False
 
   # RESET ABILITIES (when a stock is lost)
-  def resetAbilities(self):
+  def resetAbilities(self) -> None:
     self.remainingAirJumps = self.totalAirJumps
 
-  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1):
+  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1) -> None:
     if not self.shieldActive: # If player shield is down
       mult = 1
       angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
@@ -734,18 +739,18 @@ class BarrelMan(Player):
     # Downwards ability
     self.sword = None
   
-  def update(self, game):
+  def update(self, game) -> None:
     if self.sword != None and not self.sword.attachedToPlayer:
       self.sword = None
     super().update(game)
 
-  def draw(self):
+  def draw(self) -> None:
     if self.activeAbilities['first'] != False: # Draw normal image if no abilities are used
       super().draw(self.rollImage)
     else: # Draw rolling image if an ability requiring Barrel Man to roll is used
       super().draw(self.image)
 
-  def activateFirstAbility(self):
+  def activateFirstAbility(self) -> bool:
     if self.xDir != 0: # If there is movement on the x-plane
       self.xDir = (self.xDir // abs(self.xDir)) * 10 # Set speed
       self.speedLocked = True # Lock speed
@@ -753,7 +758,7 @@ class BarrelMan(Player):
       return super().activateFirstAbility() # Activate first ability
     return False
   
-  def pressedFirstAbility(self):
+  def pressedFirstAbility(self) -> None:
     hitPlayer = self.game.hitPlayer(self) # Find a hit player
     if hitPlayer != None: # If there is a hit player
       self.releaseFirstAbility() # End the ability
@@ -761,11 +766,11 @@ class BarrelMan(Player):
     if time.time() - self.rollTimer > 1.5:
       self.releaseFirstAbility()
 
-  def releaseFirstAbility(self):
+  def releaseFirstAbility(self) -> None:
     super().releaseFirstAbility()
     self.speedLocked = False # Allow player to move again
 
-  def activateSecondAbility(self):
+  def activateSecondAbility(self) -> bool:
     if time.time() - self.daggerTimer > 3: # If dagger cooldown is passed
       self.daggerTimer = time.time() # Set cooldown timer
       for i in range(8): # Create 8 daggers, each going a different direction
@@ -774,14 +779,14 @@ class BarrelMan(Player):
       return super().activateSecondAbility()
     return False
   
-  def activateDownwardsAbility(self):
+  def activateDownwardsAbility(self) -> None:
     super().activateDownwardsAbility()
     self.sword = VeryLongSword(self.game, (self.x, self.y), self)
     self.game.obstacles.append(self.sword) # Create a very long sword, which will stick to the player until it hits the ground
     self.yDir = 15 # Set y-dir of player to be 15
     self.remainingAirJumps = 0 # Make sure barrel man cannot double jump afterwards
 
-  def resetAbilities(self):
+  def resetAbilities(self) -> None:
     self.speedLocked = False # Turn off speedlock
     self.daggerTimer = 0 # Reset dagger timer
     if self.sword != None: # Remove Very Long Sword if it is still attached to Barrel Man
@@ -811,9 +816,9 @@ class Pog(Player):
     # SECOND ABILITY
     self.isBig = False
     self.hitPlayers = [] # Set players that this ability has hit
-    self.hitPlayersTimer = [] # set players that this abiolity cannot hit until timer is done
+    self.hitPlayersTimer = [] # set players that this ability cannot hit until timer is done
 
-  def update(self, game):
+  def update(self, game) -> None:
     super().update(game)
     if self.isBig: # If player is big
       for i in range(len(game.players)): # Loop through players using an index
@@ -824,35 +829,35 @@ class Pog(Player):
             self.hitPlayers.append(player) # Set player to be hit by Pog
             self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
           elif player in self.hitPlayers and time.time() - self.hitPlayersTimer[i] >= 0.5: # If the player is not hitting Pog and the cooldown timer has passed, remove both the player and the cooldown timer from their lists
-              self.hitPlayersTimer.pop(i)
-              self.hitPlayers.pop(i)
+            self.hitPlayersTimer.pop(i)
+            self.hitPlayers.pop(i)
 
-  def draw(self):
+  def draw(self) -> None:
     super().draw(self.image) # Draw Pog
 
-  def activateFirstAbility(self):
+  def activateFirstAbility(self) -> bool:
     if not self.isBig: # If the player is not big
       self.firstAbilityHeldTimer = time.time() # Set a timer for how long this is held down
       return super().activateFirstAbility()
     return False
 
-  def pressedFirstAbility(self):
+  def pressedFirstAbility(self) -> None:
     if time.time() - self.firstAbilityHeldTimer > self.maxPogHoldTimer: # If the held down time reaches the maximum held down time
       self.releaseFirstAbility()
 
-  def releaseFirstAbility(self):
+  def releaseFirstAbility(self) -> None:
     super().releaseFirstAbility()
     if time.time() - self.firstAbilityCooldownTimer >= 0.5: # If firsy ability is teleased and the time since the last projectile was shot is greater than 0.5s
       self.game.obstacles.append(PogProjectile(self.game, self, time.time() - self.firstAbilityHeldTimer)) # shoot projectile
       self.firstAbilityCooldownTimer = time.time() # Reset ability timer
 
-  def activateDownwardsAbility(self):
+  def activateDownwardsAbility(self) -> bool:
     if not self.isBig: # If the player is not big
       self.game.obstacles.append(PogBomb(self.game, self)) # Add a PogBomb to the game
       return super().activateDownwardsAbility()
     return False
 
-  def activateSecondAbility(self):
+  def activateSecondAbility(self) -> bool:
     # Switch Pog from being small/big and set its mobility variables to match the soze
     if not self.isBig: 
       self.changeSize((80, 80))
@@ -869,7 +874,7 @@ class Pog(Player):
     self.isBig = not self.isBig
     return super().activateSecondAbility()
   
-  def resetAbilities(self):
+  def resetAbilities(self) -> None:
     self.isBig = False # Become small again, give the small properties back
     self.changeSize((24, 24))
     self.totalAirJumps = 5
@@ -879,11 +884,20 @@ class Pog(Player):
     self.firstAbilityCooldownTimer = time.time() # Set the cooldown timer
     super().resetAbilities()
 
-  def changeSize(self, newDimensions):
+  def changeSize(self, newDimensions) -> None:
     super().changeSize(newDimensions) # Change size when Pog switches sizes
     self.image = pygame.transform.scale(self.image, newDimensions)
 
+# ERROR PLAYER CLASS
 
+class ErrorPlayer(Player):
+
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
+    self.mainImage = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
+
+  def draw(self) -> None:
+    super().draw(self.mainImage)
 
 
 
@@ -907,21 +921,21 @@ class Obstacle(GameObject):
     self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
     
 
-  def update(self, game):
+  def update(self, game) -> None:
     super().update(game)
     self.detectCollision() # Detect collisions with players
     if self.timer != None: # Update obstacle timers
       self.updateTimer()
   
-  def updateTimer(self):
+  def updateTimer(self) -> None:
     self.timer -= deltaT / 1000 # Update timer
     if self.timer <= 0: # Run function if timer is less than or equal to 0 (most of the time, this will remove the obstacle)
       self.belowZeroTimer()
 
-  def belowZeroTimer(self):
+  def belowZeroTimer(self) -> None:
     self.mustBeRemoved = True # Remove obstacle
   
-  def detectCollision(self):
+  def detectCollision(self) -> None:
     for player in self.detectHitPlayers: # Loop through applicable players
       if self.rect.colliderect(player.rect) and not player in self.currentlyHitPlayers:
         self.onCollision(player) # Hit player, make sure they are not hit twice before their rectangles are not colliding
@@ -947,7 +961,7 @@ class VeryLongSword(Obstacle):
         self.attachedToPlayer = None
         self.y -= 10
 
-  def onCollision(self, player):
+  def onCollision(self, player) -> None:
     player.punched((self.x, self.y), 11, 0.6) # Hit any colliding players
 
 class Dagger(Obstacle):
@@ -961,10 +975,10 @@ class Dagger(Obstacle):
     self.stuck = False # Track whether the dagger should continue moving
     self.stuckTime = 7 # Time the dagger should stay once it hits a platform
 
-  def onCollision(self, player):
+  def onCollision(self, player) -> None:
     player.punched((self.x, self.y), 8, 0.35) # Hit any colliding players
 
-  def update(self, game):
+  def update(self, game) -> None:
     if not self.stuck:
       self.angle = math.atan2(self.xDir, self.yDir) * (180 / math.pi) # Set angle
       for platform in game.platforms:
@@ -976,10 +990,10 @@ class Dagger(Obstacle):
           self.stuck = True
     super().update(game)
 
-  def draw(self):
+  def draw(self) -> None:
     WINDOW.blit(pygame.transform.rotate(self.img, self.angle), (self.x, self.y))
 
-  def hitPlatformFromBottom(self, platform):
+  def hitPlatformFromBottom(self, platform) -> None:
     self.y = platform.rect.top - self.height
     self.y -= self.yDir
     self.inAir = False
@@ -997,7 +1011,7 @@ class PogProjectile(Obstacle):
     else:
       self.xDir = -5 - (power * 3)
 
-  def onCollision(self, player):
+  def onCollision(self, player) -> None:
     player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
 
 class PogBomb(Obstacle):
@@ -1014,13 +1028,13 @@ class PogBomb(Obstacle):
     self.usesGravity = True
     self.explosionCircle = None # Variable used to create a circle in its exploding stage
 
-  def update(self, game):
+  def update(self, game) -> None:
     super().update(game)
     if time.time() - self.currImageFlipTimer > 0.5: # Flip the image used in the bomb's primed stage
       self.currImageFlipper = not self.currImageFlipper
       self.currImageFlipTimer = time.time()
 
-  def draw(self):
+  def draw(self) -> None:
     if not self.isExploding:
       if self.currImageFlipper: # Display a different image based on how long it has been since it was last switched
         WINDOW.blit(self.bombImage1, (self.x, self.y))
@@ -1031,7 +1045,7 @@ class PogBomb(Obstacle):
       self.explosionImage.y = self.y + (self.height / 2) - (self.explosionImage.height / 2)
       self.explosionImage.update()
 
-  def belowZeroTimer(self):
+  def belowZeroTimer(self) -> None:
     self.explosionImage.scale((300, 300)) # Set the explosion size
     if not self.isExploding: # On the first frame where the bomb explodes, create the circle
       self.explosionCircle = util.Circle((self.x, self.y), self.explosionImage.width / 2)
@@ -1039,7 +1053,7 @@ class PogBomb(Obstacle):
     if self.explosionImage.frame == self.explosionImage.lastFrame: # Remove the obstacle if the animation is on its last frame
       self.mustBeRemoved = True
 
-  def detectCollision(self):
+  def detectCollision(self) -> None:
     if self.explosionCircle != None: # Make sure the explosion circle exists
       for player in self.detectHitPlayers: # Hit a player if they hit the explosion
         if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
@@ -1048,7 +1062,7 @@ class PogBomb(Obstacle):
         elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
           self.currentlyHitPlayers.remove(player)
 
-  def onCollision(self, player):
+  def onCollision(self, player) -> None:
     player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
 
 
@@ -1073,7 +1087,7 @@ class AnimatedSprite:
     self.lastFrame = (self.imgFull.get_height() // self.frameHeight) - 1
     self.frame = 0
 
-  def update(self):
+  def update(self) -> None:
     self.timeAtFrame += deltaT / 1000
     if self.timeAtFrame > self.timePerFrame:
       self.frame += 1
@@ -1082,13 +1096,37 @@ class AnimatedSprite:
         self.frame = 0
     self.draw()
   
-  def draw(self):
+  def draw(self) -> None:
     WINDOW.blit(self.imgFull, (self.x, self.y), (0, self.frame * self.frameHeight, self.width, self.height))
 
-  def scale(self, scaling):
+  def scale(self, scaling) -> None:
     self.width, self.height = scaling
     self.frameHeight = self.height
     self.imgFull = pygame.transform.scale(self.imgFull, (self.width, self.height * (self.lastFrame + 1)))
+
+# RANDOM CHANGING CLIPPED SPRITE
+
+class ChangingSprite:
+
+  def __init__(self, fullImage, coords, dimensions, timePerPartialImage):
+    self.fullImage = fullImage
+    self.x, self.y = coords
+    self.width, self.height = dimensions
+    self.timeDiff = timePerPartialImage
+    self.currTime = 0
+    self.imagePosX = 0
+    self.imagePosY = 0
+
+  def update(self) -> None:
+    self.currTime += deltaT / 1000
+    if time.time() - self.currTime >= self.timeDiff:
+      self.changeSpritePosition()
+    WINDOW.blit(self.fullImage, (self.x, self.y), (self.imagePosX, self.imagePosY, self.width, self.height))
+
+  def changeSpritePosition(self):
+    self.imagePosX = random.randint(0, self.fullImage.get_width() - self.width)
+    self.imagePosY = random.randint(0, self.fullImage.get_height() - self.height)
+  
 
 # ================================================================
 # ================================================================
