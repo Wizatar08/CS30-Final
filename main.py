@@ -131,6 +131,9 @@ class TransparentRectangle:
     # Set text
     self.text = text
 
+    # Set t4ext to center rectangle
+    self.setText(self.text.text)
+
   def draw(self):
     WINDOW.blit(self.surface, (self.x, self.y)) # Put surface on window
     if self.text != None: # If there is text, update the text
@@ -179,25 +182,29 @@ class Game:
     ] # Create level platforms
     self.players = [] # Create list of players
     if player1option == 0: # Set player 1 character
-      self.players.append(BarrelMan(self, (100, 100), 'left'))
+      self.players.append(BarrelMan(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
     elif player1option == 1:
-      self.players.append(Pog(self, (100, 100), 'left'))
+      self.players.append(Pog(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
     else:
-      self.players.append(Player(self, (100, 100), 'left'))
+      self.players.append(Player(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
 
     if player2option == 0: # Set player 2 character
-      self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
+      self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
     elif player2option == 1:
-      self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
+      self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
     else:
-      self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right'))
+      self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
 
     self.obstacles = [] # Create list of obstacles
  
     self.percentageXSpacingDiff = (WINDOW_SIZE[0] - 200) / (len(self.players) - 1) # Set spacing between percentage box
-    self.percentageRectangles = [] # Create rectangles, putting the percentages of each player over top of them
+    self.statDisplay = {} # Create rectangles, putting the percentages of each player over top of them
     for i in range(len(self.players)): # Add a transparent rectangle to the list for each player
-      self.percentageRectangles.append(TransparentRectangle((50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 80), (100, 50), 127, PLAYER_COLORS[i], Text(TEXT_FONT, '0%')))
+      player = self.players[i]
+      self.statDisplay[player] = [
+        TransparentRectangle((50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 80), (100, 50), 127, PLAYER_COLORS[i], Text(TEXT_FONT, '0%')),
+        Text(TEXT_FONT_SMALL, 'Stocks: 3', (50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 30), PLAYER_COLORS[i])
+      ]
 
   def update(self):
     # Update platforms
@@ -222,12 +229,18 @@ class Game:
     for obstacle in removableObstacles: # Remove any obstacles that should be removed
       self.obstacles.remove(obstacle)
   
-    self.drawPlayerPrecentages() # Draw the player percentages and background rectangles
+    self.drawPlayerStats() # Draw the player percentages and background rectangles
 
-  def drawPlayerPrecentages(self):
-    for i in range(len(self.players)): # Draw rectangle and text for each player
-      self.percentageRectangles[i].setText(f"{self.players[i].percentage}%")
-      self.percentageRectangles[i].draw()
+  def drawPlayerStats(self):
+    for player in self.players: # Draw rectangle and text for each player
+      self.statDisplay[player][0].draw()
+      self.statDisplay[player][1].update()
+
+  def setPlayerPercentage(self, player, percentage):
+    self.statDisplay[player][0].setText(f'{percentage}%')
+
+  def setPlayerStocks(self, player, stocks):
+    self.statDisplay[player][1].text = f'Stocks: {stocks}'
 
   # Player actual hitbox collisions
   def hitPlayer(self, checkingPlayer):
@@ -327,8 +340,10 @@ class Player(GameObject):
   ultAbilityIsHeld = False
   downwardsAbilityIsHeld = False
 
-  def __init__(self, game, coords, playerSide):
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     self.game = game
+    self.hoverText = Text(TEXT_FONT_SMALL, hoverText)
+    self.hoverText.textColor = hoverTextColor
     self.width, self.height = (32, 32) # Width and height coords
     super().__init__(coords, (self.width, self.height))
     self.rect = pygame.rect.Rect(coords[0], coords[1], self.width, self.height)
@@ -377,6 +392,10 @@ class Player(GameObject):
     self.shieldStartTimer = 0
     self.shieldButtonPressed = False
 
+    # Game stats
+    self.stocks = 3
+    self.spawnCoords = coords
+
 
   def draw(self, image = None):
     if image == None:
@@ -399,10 +418,16 @@ class Player(GameObject):
       if self.shieldActive: # Draw shield if shield is active
         WINDOW.blit(self.shieldImg, (self.x - 12, self.y - 12))
     
+    # Draw hover text
+    self.hoverText.x = self.x + (self.width / 2) - (TEXT_FONT.size(self.hoverText.text)[0] / 2)
+    self.hoverText.y = self.y - 25
+    self.hoverText.update()
+    
 
 
   def update(self, game): # Update every frame
     self.collideWithPlatforms(game) # Check collisions with platforms
+    self.detectIfOutOfBounds()
     self.updateControls()
     super().update(game) # Call super function
     self.detectControls()
@@ -526,6 +551,15 @@ class Player(GameObject):
       self.attackBox = pygame.rect.Rect(self.x + (self.width / 2), self.y - 16, (self.width / 2) + 24, self.height + 32)
     else:
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
+
+  def detectIfOutOfBounds(self):
+    if self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000: # If the player's coords are out of bounds
+      self.x, self.y = self.spawnCoords # Reset their position
+      self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
+      self.stocks -= 1 # Remove one from their stocks
+      self.percentage = 0 # Set their percentages to be equal to 0
+      self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
+      self.resetAbilities() # Reset abilties
 
   def changeSize(self, newDimensions):
     previousWidth, previousHeight = self.width, self.height # Save previous sizes
@@ -655,6 +689,10 @@ class Player(GameObject):
   def endUltABility(self):
     self.activeAbilities['ult'] = False
 
+  # RESET ABILITIES (when a stock is lost)
+  def resetAbilities(self):
+    self.remainingAirJumps = self.totalAirJumps
+
   def punched(self, sourceCoords, damage, knockbackMultiplyer = 1):
     if not self.shieldActive: # If player shield is down
       mult = 1
@@ -669,6 +707,7 @@ class Player(GameObject):
       self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
       self.percentage += damage # Add to percentage
       self.percentage = round(self.percentage, 1) # Round percentage
+      self.game.setPlayerPercentage(self, self.percentage)
 
 
 
@@ -677,8 +716,8 @@ class Player(GameObject):
 class BarrelMan(Player):
   firstAbilityIsHeld = True
 
-  def __init__(self, game, coords, playerSide):
-    super().__init__(game, coords, playerSide)
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
     self.image = pygame.transform.scale(pygame.image.load(
       'assets/images/characters/barrel_man/barrel_man.png'
     ), (self.width, self.height)) # Load normal image
@@ -691,7 +730,15 @@ class BarrelMan(Player):
 
     # Second ability cooldown
     self.daggerTimer = 0
+
+    # Downwards ability
+    self.sword = None
   
+  def update(self, game):
+    if self.sword != None and not self.sword.attachedToPlayer:
+      self.sword = None
+    super().update(game)
+
   def draw(self):
     if self.activeAbilities['first'] != False: # Draw normal image if no abilities are used
       super().draw(self.rollImage)
@@ -729,17 +776,28 @@ class BarrelMan(Player):
   
   def activateDownwardsAbility(self):
     super().activateDownwardsAbility()
-    self.game.obstacles.append(VeryLongSword(self.game, (self.x, self.y), self)) # Create a very long sword, which will stick to the player until it hits the ground
+    self.sword = VeryLongSword(self.game, (self.x, self.y), self)
+    self.game.obstacles.append(self.sword) # Create a very long sword, which will stick to the player until it hits the ground
     self.yDir = 15 # Set y-dir of player to be 15
     self.remainingAirJumps = 0 # Make sure barrel man cannot double jump afterwards
+
+  def resetAbilities(self):
+    self.speedLocked = False # Turn off speedlock
+    self.daggerTimer = 0 # Reset dagger timer
+    if self.sword != None: # Remove Very Long Sword if it is still attached to Barrel Man
+      self.game.obstacles.remove(self.sword)
+      self.sword = None
+    super().resetAbilities()
+
+
 
 # POG CHARACTER
 
 class Pog(Player):
   firstAbilityIsHeld = True
 
-  def __init__(self, game, coords, playerSide):
-    super().__init__(game, coords, playerSide)
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
     self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height)) # Load normal image
     self.weight = 5 # Set base stats
     self.jumpingPower = 25
@@ -748,7 +806,7 @@ class Pog(Player):
     # FIRST ABILITY
     self.firstAbilityCooldownTimer = 0
     self.firstAbilityHeldTimer = 0
-    self.maxPogHoldTimer = 4.5
+    self.maxPogHoldTimer = 3
 
     # SECOND ABILITY
     self.isBig = False
@@ -810,6 +868,16 @@ class Pog(Player):
       self.weight = 5
     self.isBig = not self.isBig
     return super().activateSecondAbility()
+  
+  def resetAbilities(self):
+    self.isBig = False # Become small again, give the small properties back
+    self.changeSize((24, 24))
+    self.totalAirJumps = 5
+    self.jumpingPower = 24
+    self.weight = 5
+    self.firstAbilityHeldTimer = 0 # Make sure Pop Projectile ability is reset (it doesn't fire after resetting)
+    self.firstAbilityCooldownTimer = time.time() # Set the cooldown timer
+    super().resetAbilities()
 
   def changeSize(self, newDimensions):
     super().changeSize(newDimensions) # Change size when Pog switches sizes
@@ -841,68 +909,69 @@ class Obstacle(GameObject):
 
   def update(self, game):
     super().update(game)
-    self.detectCollision()
-    if self.timer != None:
+    self.detectCollision() # Detect collisions with players
+    if self.timer != None: # Update obstacle timers
       self.updateTimer()
   
   def updateTimer(self):
-    self.timer -= deltaT / 1000
-    if self.timer <= 0:
+    self.timer -= deltaT / 1000 # Update timer
+    if self.timer <= 0: # Run function if timer is less than or equal to 0 (most of the time, this will remove the obstacle)
       self.belowZeroTimer()
 
   def belowZeroTimer(self):
-    self.mustBeRemoved = True
+    self.mustBeRemoved = True # Remove obstacle
   
   def detectCollision(self):
-    for player in self.detectHitPlayers:
+    for player in self.detectHitPlayers: # Loop through applicable players
       if self.rect.colliderect(player.rect) and not player in self.currentlyHitPlayers:
-        self.onCollision(player)
+        self.onCollision(player) # Hit player, make sure they are not hit twice before their rectangles are not colliding
         self.currentlyHitPlayers.append(player)
       elif not self.rect.colliderect(player.rect) and player in self.currentlyHitPlayers:
         self.currentlyHitPlayers.remove(player)
   
-  def onCollision(self, player):
+  def onCollision(self, player): # Code that runs when a player hits the obstacle
     pass
 
 class VeryLongSword(Obstacle):
 
   def __init__(self, game, coords, shotBy):
     super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/verylongsword.png"), shotBy, 6)
-    self.attachedToPlayer = shotBy
+    self.attachedToPlayer = shotBy # Track who created the Very Long Sword
 
   def update(self, game):
     super().update(game)
-    if self.attachedToPlayer != None:
-      self.x = self.attachedToPlayer.x + (self.attachedToPlayer.width / 2) - (self.width / 2)
+    if self.attachedToPlayer != None: # If sword is attached to Barrel Man
+      self.x = self.attachedToPlayer.x + (self.attachedToPlayer.width / 2) - (self.width / 2) # Set coords to be just under Barrel Man
       self.y = self.attachedToPlayer.y + self.attachedToPlayer.height
-      if not self.attachedToPlayer.inAir:
+      if not self.attachedToPlayer.inAir: # If Barrel Man hits ground, stick sword into the ground and remove it so it no longer follows the player
         self.attachedToPlayer = None
         self.y -= 10
 
   def onCollision(self, player):
-    player.punched((self.x, self.y), 11, 0.6)
+    player.punched((self.x, self.y), 11, 0.6) # Hit any colliding players
 
 class Dagger(Obstacle):
 
   def __init__(self, game, coords, angle, shotBy):
     super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/dagger.png"), shotBy, 60)
-    self.xDir = 14 * math.cos(angle)
+    self.xDir = 14 * math.cos(angle) # Launch dagger in a particular direction
     self.yDir = 14 * math.sin(angle)
     self.angle = 0
     self.usesGravity = True
-    self.stuck = False
+    self.stuck = False # Track whether the dagger should continue moving
+    self.stuckTime = 7 # Time the dagger should stay once it hits a platform
 
   def onCollision(self, player):
-    player.punched((self.x, self.y), 6, 0.1)
+    player.punched((self.x, self.y), 8, 0.35) # Hit any colliding players
 
   def update(self, game):
     if not self.stuck:
-      self.angle = math.atan2(self.xDir, self.yDir) * (180 / math.pi)
+      self.angle = math.atan2(self.xDir, self.yDir) * (180 / math.pi) # Set angle
       for platform in game.platforms:
-        if self.rect.colliderect(platform.rect):
-          self.timer = 5
-          self.usesGravity = False
-          self.xDir = 0
+        if self.rect.colliderect(platform.rect): # If dagger hits a platform
+          self.timer = self.stuckTime # Set timer so the dagger can disappear on its own
+          self.usesGravity = False # Make sure dagger does not move due to gravity any longer
+          self.xDir = 0 # Stop all movement
           self.yDir = 0
           self.stuck = True
     super().update(game)
@@ -919,68 +988,68 @@ class PogProjectile(Obstacle):
 
   def __init__(self, game, shotBy, power):
     self.power = power
-    self.size = 12 + (self.power * 50)
+    self.size = 12 + (self.power * 50) # Set size of projectile
 
     super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
-    self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4)
-    if shotBy.direction > 0:
-      self.xDir = 9
+    self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4) # Set coords of the projectile spawning
+    if shotBy.direction > 0: # Set direction of projectile moving, base the speed on power
+      self.xDir = 5 + (power * 3)
     else:
-      self.xDir = -9
+      self.xDir = -5 - (power * 3)
 
   def onCollision(self, player):
-    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3))
+    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
 
 class PogBomb(Obstacle):
 
   def __init__(self, game, shotBy):
     self.size = 36
-    self.bombImage1 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb1.png'), (self.size, self.size))
+    self.bombImage1 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb1.png'), (self.size, self.size)) # Load different images
     self.bombImage2 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb2.png'), (self.size, self.size))
     self.explosionImage = AnimatedSprite(pygame.image.load('assets/images/characters/pog/pog_explosion.png'), (0, 0), 0.02, 100)
-    self.currImageFlipper = True
+    self.currImageFlipper = True # Track which of the two primed bomb texture should be displayed
     self.currImageFlipTimer = time.time()
-    self.isExploding = False
-    super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, None, 3)
+    self.isExploding = False # Track whether the bomb is in its primed stage or exploding stage
+    super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, None, 1.5)
     self.usesGravity = True
-    self.explosionCircle = None
+    self.explosionCircle = None # Variable used to create a circle in its exploding stage
 
   def update(self, game):
     super().update(game)
-    if time.time() - self.currImageFlipTimer > 0.5:
+    if time.time() - self.currImageFlipTimer > 0.5: # Flip the image used in the bomb's primed stage
       self.currImageFlipper = not self.currImageFlipper
       self.currImageFlipTimer = time.time()
 
   def draw(self):
     if not self.isExploding:
-      if self.currImageFlipper:
+      if self.currImageFlipper: # Display a different image based on how long it has been since it was last switched
         WINDOW.blit(self.bombImage1, (self.x, self.y))
       else:
         WINDOW.blit(self.bombImage2, (self.x, self.y))
-    else:
+    else: # Set the explosion coordinates to be at the top left of the texture, and update the animation
       self.explosionImage.x = self.x + (self.width / 2) - (self.explosionImage.width / 2)
       self.explosionImage.y = self.y + (self.height / 2) - (self.explosionImage.height / 2)
       self.explosionImage.update()
 
   def belowZeroTimer(self):
-    self.explosionImage.scale((350, 350))
-    if not self.isExploding:
+    self.explosionImage.scale((300, 300)) # Set the explosion size
+    if not self.isExploding: # On the first frame where the bomb explodes, create the circle
       self.explosionCircle = util.Circle((self.x, self.y), self.explosionImage.width / 2)
     self.isExploding = True
-    if self.explosionImage.frame == self.explosionImage.lastFrame:
+    if self.explosionImage.frame == self.explosionImage.lastFrame: # Remove the obstacle if the animation is on its last frame
       self.mustBeRemoved = True
 
   def detectCollision(self):
-    if self.explosionCircle != None:
-      for player in self.detectHitPlayers:
+    if self.explosionCircle != None: # Make sure the explosion circle exists
+      for player in self.detectHitPlayers: # Hit a player if they hit the explosion
         if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
           self.onCollision(player)
-          self.currentlyHitPlayers.append(player)
+          self.currentlyHitPlayers.append(player) # Make sure the player isn't hit by the explosion twice before leaving the circle
         elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
           self.currentlyHitPlayers.remove(player)
 
   def onCollision(self, player):
-    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3)
+    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
 
 
 
