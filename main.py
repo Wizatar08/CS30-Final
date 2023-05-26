@@ -211,13 +211,14 @@ class Game:
       ]
 
   def update(self) -> None:
+    # Update players
+    for player in self.players:
+      player.update(self)
+
     # Update platforms
     for platform in self.platforms:
       platform.update(self)
 
-    # Update players
-    for player in self.players:
-      player.update(self)
 
     # Player attack box collisions
     for player in self.players:
@@ -239,9 +240,6 @@ class Game:
     for player in self.players: # Draw rectangle and text for each player
       self.statDisplay[player][0].draw()
       self.statDisplay[player][1].update()
-
-  def setPlayerPercentage(self, player, percentage) -> None:
-    self.statDisplay[player][0].setText(f'{percentage}%')
 
   def setPlayerStocks(self, player, stocks) -> None:
     self.statDisplay[player][1].text = f'Stocks: {stocks}'
@@ -287,18 +285,18 @@ class GameObject:
     if self.usesGravity: # if object uses gravity, apply gravity and, if this isn't a platform, detect if it hits a platform
       self.gravity()
       if not isinstance(self, Platform):
-        self.collideWithPlatform(game)
+        self.collideWithPlatforms(game)
     self.move(deltaT) # move object
     self.draw() # draw object
 
   def move(self, deltaT) -> None:
-    self.x += self.xDir * 15 / deltaT # Change x and y positions based on time between frames and directions
-    self.y += self.yDir * 15 / deltaT
+    self.x += self.xDir * 0.015 / deltaT # Change x and y positions based on time between frames and directions
+    self.y += self.yDir * 0.015 / deltaT
 
   def draw(self) -> None:
     WINDOW.blit(self.img, (self.x, self.y)) # Draw the image
   
-  def collideWithPlatform(self, game) -> None:
+  def collideWithPlatforms(self, game) -> None:
     self.inAir = True
     for platform in game.platforms:
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get all the collision info for platform collision
@@ -330,8 +328,35 @@ class Platform(GameObject):
     super().__init__(coords, dimensions)
     self.rect = pygame.rect.Rect(self.x, self.y, dimensions[0], dimensions[1]) # Create rectangle for the platform
 
+    # ERRORCUBE platform modifier abilities
+    self.glitchedPlatformSource = None
+    self.glitchedImg = ChangingSprite(pygame.image.load('assets/images/characters/error/glitched_text.png'), (self.x, self.y), (self.width, self.height), 0.15)
+    self.glitchedTimer = (0, 0)
+
   def draw(self) -> None:
-    pygame.draw.rect(WINDOW, (241, 241, 241), self.rect) # Draw the platform
+    if self.glitchedPlatformSource != None:
+      self.glitchedImg.update()
+    else:
+      pygame.draw.rect(WINDOW, (241, 241, 241), self.rect) # Draw the platform
+
+  def update(self, game) -> None:
+    self.updateGlitchedPlatform(game)
+    super().update(game)
+
+  def updateGlitchedPlatform(self, game) -> None:
+    if self.glitchedPlatformSource != None:
+      for player in game.players:
+        if player.onTopOfPlatform:
+          if self.glitchedPlatformSource == player:
+            player.setPercentage(player.percentage - (deltaT * 0.5))
+          else:
+            player.setPercentage(player.percentage + (deltaT))
+      if time.time() - self.glitchedTimer[0] > self.glitchedTimer[1]:
+        self.glitchedPlatformSource = None
+
+  def glitch(self, source, timeLength):
+    self.glitchedPlatformSource = source
+    self.glitchedTimer = (time.time(), timeLength)
     
     
 
@@ -400,6 +425,18 @@ class Player(GameObject):
     self.stocks = 3
     self.spawnCoords = coords
 
+    # Platofrm info
+    self.onTopOfPlatform = None
+
+
+
+  def update(self, game) -> None: # Update every frame
+    self.detectIfOutOfBounds()
+    self.updateControls()
+    super().update(game) # Call super function
+    self.drawHoverText()
+    self.detectControls()
+    self.updateAbilities()
 
   def draw(self, image = None) -> None:
     if image == None:
@@ -421,21 +458,12 @@ class Player(GameObject):
         WINDOW.blit(pygame.transform.flip(pygame.transform.scale(image, (14, 14)), flipHorizontally, False), (imageCoords[0] + 9, imageCoords[1] + 9)) # Place the character image in the middle
       if self.shieldActive: # Draw shield if shield is active
         WINDOW.blit(self.shieldImg, (self.x - 12, self.y - 12))
-    
+
+  def drawHoverText(self):
     # Draw hover text
     self.hoverText.x = self.x + (self.width / 2) - (TEXT_FONT.size(self.hoverText.text)[0] / 2)
     self.hoverText.y = self.y - 25
     self.hoverText.update()
-    
-
-
-  def update(self, game) -> None: # Update every frame
-    self.collideWithPlatforms(game) # Check collisions with platforms
-    self.detectIfOutOfBounds()
-    self.updateControls()
-    super().update(game) # Call super function
-    self.detectControls()
-    self.updateAbilities()
 
   def updateControls(self) -> None: # Detect specific keys to be tapped or pressed, determined by which side of the keyboard the player is using
     if self.playerSide == 'left':
@@ -467,18 +495,23 @@ class Player(GameObject):
 
   def collideWithPlatforms(self, game) -> None:
     self.inAir = True # Automatically set the player to be in the air
+    self.onTopOfPlatform = None
     for platform in game.platforms: # Loop through platforms
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get collision info for object
       if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir >= 0: # If bottom of player hits platform, run hitting ground function
-        self.y = platform.rect.top - self.height
-        self.yDir = 0
-        self.inAir = False
-        self.remainingAirJumps = self.totalAirJumps
+        self.onLandOnPlatform(platform)
       if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0:
         self.y -= self.yDir
         self.yDir = 0
       if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
         self.x -= self.xDir
+
+  def onLandOnPlatform(self, platform):
+    self.y = platform.rect.top - self.height
+    self.yDir = 0
+    self.inAir = False
+    self.remainingAirJumps = self.totalAirJumps
+    self.onTopOfPlatform = platform
 
   def detectControls(self) -> None:
 
@@ -488,7 +521,6 @@ class Player(GameObject):
       else: # Run this function if the ability is supposed to be held and the key is released
         self.releaseFirstAbility()
     if self.secondAbilityIsHeld and self.activeAbilities['second']:
-      print(self.secondAbilityControlHeld)
       if self.secondAbilityControlHeld:
         self.pressedSecondAbility()
       else:
@@ -499,7 +531,7 @@ class Player(GameObject):
       else:
         self.releaseDownAbility()
 
-    if not self.speedLocked: # If spped can change by user input (not speedlocked)
+    if not self.speedLocked: # If speed can change by user input (not speedlocked)
       if self.leftControl: # Move left if a is pressed
         self.direction = -1
         if not self.inAir: # Constant velocity if on ground
@@ -561,8 +593,7 @@ class Player(GameObject):
       self.x, self.y = self.spawnCoords # Reset their position
       self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
       self.stocks -= 1 # Remove one from their stocks
-      self.percentage = 0 # Set their percentages to be equal to 0
-      self.game.statDisplay[self][0].setText(f'{self.percentage}%')
+      self.setPercentage(0)
       self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
       self.resetAbilities() # Reset abilties
 
@@ -573,6 +604,12 @@ class Player(GameObject):
     self.y = self.y + (previousHeight / 2) - (self.height / 2)
     self.rect.width = self.width # Set rectangle sizes
     self.rect.height = self.height
+
+  def setPercentage(self, percentage):
+    self.percentage = percentage # Set their percentages to be equal to 0
+    if self.percentage < 0:
+      self.percentage = 0
+    self.game.statDisplay[self][0].setText(f'{round(self.percentage, 1)}%')
 
 
   def updateAbilities(self) -> None:
@@ -610,7 +647,7 @@ class Player(GameObject):
   def activateFirstAbility(self, time = 0, endable = False) -> bool: # TAP OR BEGIN PRESSING ABILITY
     self.firstAbilityControl = False
     if time > 0 and not self.firstAbilityIsHeld:
-      self.activeAbilities['first'] = [time * 1000, endable]
+      self.activeAbilities['first'] = [time, endable]
     return True
 
   def pressedFirstAbility(self) -> None: # IF ABILITY IS HELD: RUN WHILE ABILITY BUTTON IS PRESSED
@@ -618,7 +655,7 @@ class Player(GameObject):
 
   def releaseFirstAbility(self, time = 0, endable = False) -> None: # IF ABILITY IS HELD: RUN ONCE ABILITY BUTTON IS RELEASED
     if time > 0 and not self.firstAbilityIsHeld:
-      self.activeAbilities['first'] = [time * 1000, endable]
+      self.activeAbilities['first'] = [time, endable]
     else:
       self.activeAbilities['first'] = False
   
@@ -632,7 +669,7 @@ class Player(GameObject):
   def activateSecondAbility(self, time = 0, endable = False) -> bool:
     self.secondAbilityControl = False
     if time > 0 and not self.secondAbilityIsHeld:
-      self.activeAbilities['second'] = [time * 1000, endable]
+      self.activeAbilities['second'] = [time, endable]
     return True
 
   def pressedSecondAbility(self) -> None:
@@ -640,7 +677,7 @@ class Player(GameObject):
 
   def releaseSecondAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.secondAbilityIsHeld:
-      self.activeAbilities['second'] = [time * 1000, endable]
+      self.activeAbilities['second'] = [time, endable]
     else:
       self.activeAbilities['second'] = False
   
@@ -654,7 +691,7 @@ class Player(GameObject):
   def activateDownwardsAbility(self, time = 0, endable = False) -> bool:
     self.downControl = False
     if time > 0 and not self.downwardsAbilityIsHeld:
-      self.activeAbilities['down'] = [time * 1000, endable]
+      self.activeAbilities['down'] = [time, endable]
     return True
     
   def pressedDownAbility(self) -> None:
@@ -662,7 +699,7 @@ class Player(GameObject):
 
   def releaseDownAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.downwardsAbilityIsHeld:
-      self.activeAbilities['down'] = [time * 1000, endable]
+      self.activeAbilities['down'] = [time, endable]
     else:
       self.activeAbilities['down'] = False
   
@@ -676,7 +713,7 @@ class Player(GameObject):
   def activateUltAbility(self, time = 0, endable = False) -> bool:
     self.ultControl = False
     if time > 0 and not self.secondAbilityIsHeld:
-      self.activeAbilities['ult'] = [time * 1000, endable]
+      self.activeAbilities['ult'] = [time, endable]
     return True
   
   def pressedUltAbility(self) -> None:
@@ -684,7 +721,7 @@ class Player(GameObject):
 
   def releaseUltAbility(self, time = 0, endable = False) -> None:
     if time > 0 and not self.ultAbilityIsHeld:
-      self.activeAbilities['ult'] = [time * 1000, endable]
+      self.activeAbilities['ult'] = [time, endable]
     else:
       self.activeAbilities['ult'] = False
   
@@ -698,11 +735,11 @@ class Player(GameObject):
   def resetAbilities(self) -> None:
     self.remainingAirJumps = self.totalAirJumps
 
-  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1) -> None:
+  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     if not self.shieldActive: # If player shield is down
       mult = 1
       angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
-      if not self.inAir: # If the player is not in the air
+      if not self.inAir and not ignoreGroundRestrictions: # If the player is not in the air
         if angle < math.pi * (1 / 4): # If hitting angle is too low or too high, set it so the player can lift off the ground
           angle = math.pi * (1 / 4)
         elif angle > math.pi * (3 / 4):
@@ -710,9 +747,7 @@ class Player(GameObject):
         mult = -1 # Set y direction multiplier
       self.xDir = (math.cos(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight # Set new x and y directions
       self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
-      self.percentage += damage # Add to percentage
-      self.percentage = round(self.percentage, 1) # Round percentage
-      self.game.setPlayerPercentage(self, self.percentage)
+      self.setPercentage(self.percentage + damage)
 
 
 
@@ -905,17 +940,34 @@ class ErrorPlayer(Player):
     super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
     self.mainImage = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
     self.glitchedImage = ChangingSprite(pygame.image.load('assets/images/characters/error/green_code.png'), (0, 0), (24, 24), 0.2)
+    self.currGlitchedPlatform = None
+    self.glitchedMode = False
 
     # DOWN ABILITY
     self.downGlitch = False
 
   def update(self, game) -> None:
-    if not self.inAir:
-      self.downGlitch = False
     super().update(game)
+    if (self.downGlitch and (not self.inAir or self.yDir <= 0)):
+      self.glitchedMode = False
+      self.speedLocked = False
+      if self.downGlitch:
+        self.downGlitch = False
+
+    if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource:
+      self.currGlitchedPlatform = None
+
+  def onLandOnPlatform(self, platform):
+    if self.glitchedMode and self.currGlitchedPlatform == None:
+      self.currGlitchedPlatform = platform
+      platform.glitch(self, 5)
+      for player in self.game.players:
+        if player.onTopOfPlatform == platform:
+          player.punched((player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
+    super().onLandOnPlatform(platform)
 
   def draw(self) -> None:
-    if self.downGlitch:
+    if self.glitchedMode:
       self.glitchedImage.x = self.x
       self.glitchedImage.y = self.y
       self.glitchedImage.update()
@@ -923,9 +975,16 @@ class ErrorPlayer(Player):
       super().draw(self.mainImage)
 
   def activateDownwardsAbility(self) -> bool:
-    self.downGlitch = True
+    self.glitchedMode = True
     self.yDir = 15
+    self.speedLocked = True
+    self.xDir = 0
+    self.downGlitch = True
     return super().activateDownwardsAbility()
+  
+  def resetAbilities(self) -> None:
+    self.glitchedMode = False
+    super().resetAbilities()
 
 
 
@@ -956,7 +1015,7 @@ class Obstacle(GameObject):
       self.updateTimer()
   
   def updateTimer(self) -> None:
-    self.timer -= deltaT / 1000 # Update timer
+    self.timer -= deltaT # Update timer
     if self.timer <= 0: # Run function if timer is less than or equal to 0 (most of the time, this will remove the obstacle)
       self.belowZeroTimer()
 
@@ -1116,7 +1175,7 @@ class AnimatedSprite:
     self.frame = 0
 
   def update(self) -> None:
-    self.timeAtFrame += deltaT / 1000
+    self.timeAtFrame += deltaT
     if self.timeAtFrame > self.timePerFrame:
       self.frame += 1
       self.timeAtFrame = 0
@@ -1146,7 +1205,7 @@ class ChangingSprite:
     self.imagePosY = 0
 
   def update(self) -> None:
-    self.currTime += deltaT / 1000
+    self.currTime += deltaT
     if time.time() - self.currTime >= self.timeDiff:
       self.changeSpritePosition()
     WINDOW.blit(self.fullImage, (self.x, self.y), (self.imagePosX, self.imagePosY, self.width, self.height))
@@ -1174,7 +1233,7 @@ deltaT = 0
 while True:
   pygame.display.update() # Update display
   WINDOW.fill((0, 0, 0))
-  deltaT = fpsClock.tick(60)
+  deltaT = fpsClock.tick(60) / 1000
   
   keys = pygame.key.get_pressed() # Get all keys pressed
   wPressed = keys[gameGlobals.K_w] # Get certain pressed keys
