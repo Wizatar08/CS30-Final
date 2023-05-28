@@ -1207,7 +1207,7 @@ class PogBomb(Obstacle):
     if self.explosionCircle != None:
       for player in self.detectHitPlayers:
         if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
-          print("HI") # self.onCollision(player)
+          self.onCollision(player)
           self.currentlyHitPlayers.append(player)
         elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
           self.currentlyHitPlayers.remove(player)
