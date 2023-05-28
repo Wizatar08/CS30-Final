@@ -346,7 +346,7 @@ class Platform(GameObject):
   def updateGlitchedPlatform(self, game) -> None:
     if self.glitchedPlatformSource != None:
       for player in game.players:
-        if player.onTopOfPlatform:
+        if player.onTopOfPlatform == self:
           if self.glitchedPlatformSource == player:
             player.setPercentage(player.percentage - (deltaT * 0.5))
           else:
