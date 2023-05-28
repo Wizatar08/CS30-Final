@@ -392,11 +392,12 @@ class Player(GameObject):
 
     self.weight = 3
 
-    # Movement base stats
+    # Movement base vars
     self.jumpingPower = 25 # How high player can jump
     self.horizontalSpeed = 4 # Walking speed
     self.speedLocked = False
     self.direction = 1 # Sets which direction the character is facing (1 for right, -1 for left)
+    self.incapacitatedTimers = (0, 0)
 
     # Controls
     self.leftControl = False
@@ -425,7 +426,7 @@ class Player(GameObject):
     self.stocks = 3
     self.spawnCoords = coords
 
-    # Platofrm info
+    # Platform info
     self.onTopOfPlatform = None
 
 
@@ -466,32 +467,46 @@ class Player(GameObject):
     self.hoverText.update()
 
   def updateControls(self) -> None: # Detect specific keys to be tapped or pressed, determined by which side of the keyboard the player is using
-    if self.playerSide == 'left':
-      self.leftControl = aPressed
-      self.rightControl = dPressed
-      self.upControl = wTapped
-      self.downControl = sTapped
-      self.downControlHeld = sPressed
-      self.firstAbilityControl = nTapped
-      self.firstAbilityControlHeld = nPressed
-      self.secondAbilityControl = mTapped
-      self.secondAbilityControlHeld = mTapped
-      self.shieldControl = hPressed
-      self.punchControl = bTapped
-      self.ultControl = bTapped and self.xDir == 0
-    elif self.playerSide == 'right':
-      self.leftControl = leftPressed
-      self.rightControl = rightPressed
-      self.upControl = upTapped
-      self.downControl = downTapped
-      self.downControlHeld = downPressed
-      self.firstAbilityControl = num2Tapped
-      self.firstAbilityControlHeld = num2Pressed
-      self.secondAbilityControl = num3Tapped
-      self.secondAbilityControlHeld = num3Pressed
-      self.shieldControl = num5Pressed
-      self.punchControl = num1Tapped
-      self.ultControl = num1Tapped and self.xDir == 0
+    if time.time() - self.incapacitatedTimers[0] > self.incapacitatedTimers[1]:
+      if self.playerSide == 'left':
+        self.leftControl = aPressed
+        self.rightControl = dPressed
+        self.upControl = wTapped
+        self.downControl = sTapped
+        self.downControlHeld = sPressed
+        self.firstAbilityControl = nTapped
+        self.firstAbilityControlHeld = nPressed
+        self.secondAbilityControl = mTapped
+        self.secondAbilityControlHeld = mTapped
+        self.shieldControl = hPressed
+        self.punchControl = bTapped
+        self.ultControl = bTapped and self.xDir == 0
+      elif self.playerSide == 'right':
+        self.leftControl = leftPressed
+        self.rightControl = rightPressed
+        self.upControl = upTapped
+        self.downControl = downTapped
+        self.downControlHeld = downPressed
+        self.firstAbilityControl = num2Tapped
+        self.firstAbilityControlHeld = num2Pressed
+        self.secondAbilityControl = num3Tapped
+        self.secondAbilityControlHeld = num3Pressed
+        self.shieldControl = num5Pressed
+        self.punchControl = num1Tapped
+        self.ultControl = num1Tapped and self.xDir == 0
+    else:
+      self.leftControl = False
+      self.rightControl = False
+      self.upControl = False
+      self.downControl = False
+      self.downControlHeld = False
+      self.firstAbilityControl = False
+      self.firstAbilityControlHeld = False
+      self.secondAbilityControl = False
+      self.secondAbilityControlHeld = False
+      self.shieldControl = False
+      self.punchControl = False
+      self.ultControl = False
 
   def collideWithPlatforms(self, game) -> None:
     self.inAir = True # Automatically set the player to be in the air
@@ -587,6 +602,9 @@ class Player(GameObject):
       self.attackBox = pygame.rect.Rect(self.x + (self.width / 2), self.y - 16, (self.width / 2) + 24, self.height + 32)
     else:
       self.attackBox = pygame.rect.Rect(self.x - 24, self.y - 16, (self.width / 2) + 24, self.height + 32)
+
+  def incapacitate(self, timeLength):
+    self.incapacitatedTimers = (time.time(), timeLength)
 
   def detectIfOutOfBounds(self) -> None:
     if self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000: # If the player's coords are out of bounds
@@ -946,18 +964,37 @@ class ErrorPlayer(Player):
     # DOWN ABILITY
     self.downGlitch = False
 
+    # FIRST ABILITY
+    self.sideGlitch = False
+    self.remainingDist = 0
+    self.activeBomb = None
+    self.bombCooldown = 0
+    self.firstAbilityMovement = True
+
   def update(self, game) -> None:
     super().update(game)
-    if (self.downGlitch and (not self.inAir or self.yDir <= 0)):
+    if (self.downGlitch and (not self.inAir or self.yDir <= 0)) or (self.sideGlitch and self.remainingDist <= 0):
       self.glitchedMode = False
       self.speedLocked = False
       if self.downGlitch:
         self.downGlitch = False
+      elif self.sideGlitch:
+        self.sideGlitch = False
+    if not self.inAir:
+      self.firstAbilityMovement = True
 
     if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource:
       self.currGlitchedPlatform = None
 
-  def onLandOnPlatform(self, platform):
+  def move(self, deltaT) -> None:
+    if not self.sideGlitch:
+      super().move(deltaT)
+    else:
+      dist = 0.5 / deltaT
+      self.x += dist * self.direction
+      self.remainingDist -= dist
+
+  def onLandOnPlatform(self, platform) -> None:
     if self.glitchedMode and self.currGlitchedPlatform == None:
       self.currGlitchedPlatform = platform
       platform.glitch(self, 5)
@@ -975,16 +1012,42 @@ class ErrorPlayer(Player):
       super().draw(self.mainImage)
 
   def activateDownwardsAbility(self) -> bool:
-    self.glitchedMode = True
-    self.yDir = 15
-    self.speedLocked = True
-    self.xDir = 0
-    self.downGlitch = True
+    if not self.sideGlitch:
+      self.glitchedMode = True
+      self.yDir = 15
+      self.speedLocked = True
+      self.xDir = 0
+      self.downGlitch = True
     return super().activateDownwardsAbility()
+  
+  def activateFirstAbility(self) -> bool:
+    if not self.downGlitch:
+      if self.activeBomb == None and self.firstAbilityMovement:
+        self.remainingDist = 200
+        self.sideGlitch = True
+        self.glitchedMode = True
+        self.speedLocked = True
+        self.xDir = 0
+        self.yDir = 0
+        self.firstAbilityMovement = False
+        if time.time() - self.bombCooldown >= 5:
+          newBomb = GlitchBomb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)))
+          self.activeBomb = newBomb
+          self.game.obstacles.append(newBomb)
+          self.bombCooldown = time.time()
+      elif self.activeBomb != None:
+        self.activeBomb.detonate()
+        self.activeBomb = None
+    return super().activateFirstAbility()
+  
+  def collideWithPlatforms(self, game) -> None:
+    if not self.sideGlitch:
+      super().collideWithPlatforms(game)
   
   def resetAbilities(self) -> None:
     self.glitchedMode = False
     super().resetAbilities()
+    self.bombCooldown = time.time()
 
 
 
@@ -1141,20 +1204,57 @@ class PogBomb(Obstacle):
       self.mustBeRemoved = True
 
   def detectCollision(self) -> None:
-    if self.explosionCircle != None: # Make sure the explosion circle exists
-      for player in self.detectHitPlayers: # Hit a player if they hit the explosion
+    if self.explosionCircle != None:
+      for player in self.detectHitPlayers:
         if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
-          self.onCollision(player)
-          self.currentlyHitPlayers.append(player) # Make sure the player isn't hit by the explosion twice before leaving the circle
+          print("HI") # self.onCollision(player)
+          self.currentlyHitPlayers.append(player)
         elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
           self.currentlyHitPlayers.remove(player)
 
   def onCollision(self, player) -> None:
     player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
 
+class GlitchBomb(Obstacle):
 
+  def __init__(self, game, coords):
+    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/characters/error/missing_textures_pb.png'), (20, 20)))
+    self.usesGravity = True
+    self.explosionSprite = AnimatedSprite(pygame.image.load('assets/images/characters/error/glitch_explosion.png'), (self.x, self.y), 0.05, 500)
+    self.explosionSize = 150
+    self.explosionSprite.scale((self.explosionSize, self.explosionSize))
+    self.isExploding = False
+    self.explosionCircle = None
 
+  def draw(self) -> None:
+    if self.isExploding:
+      self.explosionSprite.update()
+    else:
+      super().draw()
 
+  def update(self, game) -> None:
+    if self.isExploding and self.explosionSprite.frame == self.explosionSprite.lastFrame:
+      self.mustBeRemoved = True
+    return super().update(game)
+  
+  def detonate(self):
+    self.isExploding = True
+    self.explosionCircle = util.Circle((self.x, self.y), self.explosionSize / 2)
+    self.x += (self.width / 2) - (self.explosionSize / 2)
+    self.y += (self.height / 2) - (self.explosionSize / 2)
+    self.explosionSprite.x = self.x
+    self.explosionSprite.y = self.y
+  
+  def detectCollision(self) -> None:
+    if self.explosionCircle != None: # Make sure the explosion circle exists
+      for player in self.detectHitPlayers: # Hit a player if they hit the explosion
+        if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
+          player.incapacitate(1.5)
+          self.currentlyHitPlayers.append(player) # Make sure the player isn't hit by the explosion twice before leaving the circle
+        elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
+          self.currentlyHitPlayers.remove(player)
+
+  
 
 
 # ANIMATED SPRITE
