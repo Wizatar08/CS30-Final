@@ -210,6 +210,9 @@ class Game:
         Text(TEXT_FONT_SMALL, 'Stocks: 3', (50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 30), PLAYER_COLORS[i])
       ]
 
+    self.currUltBall = None
+    self.ultBallSpawnTime = 3
+
   def update(self) -> None:
     # Update players
     for player in self.players:
@@ -219,17 +222,16 @@ class Game:
     for platform in self.platforms:
       platform.update(self)
 
-
     # Player attack box collisions
     for player in self.players:
       for hitPlayer in self.players:
         if player.attackBox != None:
           if player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
-            hitPlayer.onNormalAttack((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
+            hitPlayer.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
           else:
             for obstacle in self.obstacles:
               if player.attackBox.colliderect(obstacle.rect):
-                obstacle.onNormalAttack((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
+                obstacle.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
     
     removableObstacles = [] # List of obstacles to remove (obstacles cannot be removed from the list when in the middle of looping through that list)
     for obstacle in self.obstacles: # Update the obstacle
@@ -241,6 +243,13 @@ class Game:
   
     self.drawPlayerStats() # Draw the player percentages and background rectangles
 
+    # Update ult ball
+    if self.ultBallSpawnTime > 0:
+      self.ultBallSpawnTime -= deltaT
+    elif self.currUltBall == None:
+      self.currUltBall = UltBall(self)
+      self.obstacles.append(self.currUltBall)
+
   def drawPlayerStats(self) -> None:
     for player in self.players: # Draw rectangle and text for each player
       self.statDisplay[player][0].draw()
@@ -249,11 +258,14 @@ class Game:
   def setPlayerStocks(self, player, stocks) -> None:
     self.statDisplay[player][1].text = f'Stocks: {stocks}'
 
-  # Player actual hitbox collisions
-  def hitPlayer(self, checkingPlayer) -> bool:
+  # Player/object actual hitbox collisions
+  def hitObject(self, checkingPlayer) -> bool:
     for player in self.players: # Loop through players
       if player != checkingPlayer and checkingPlayer.rect.colliderect(player.rect): # If attack box hits another player, return the hit player
         return player
+    for obstacle in self.obstacles:
+      if checkingPlayer.rect.colliderect(obstacle.rect) and obstacle.punchable:
+        return obstacle
     return None # if no players are found, return nothing
 
     
@@ -299,6 +311,9 @@ class GameObject:
         self.collideWithPlatforms(game)
     self.move(deltaT) # move object
     self.draw() # draw object
+    
+    if self.isOutOfBounds():
+      self.onOutOfBounds()
 
   def move(self, deltaT) -> None:
     self.x += self.xDir * 0.015 / deltaT # Change x and y positions based on time between frames and directions
@@ -331,7 +346,7 @@ class GameObject:
       self.yDir = 0 # Stop the object from moving
       self.inAir = False
 
-  def onNormalAttack(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     mult = 1
     angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
     if not self.inAir and not ignoreGroundRestrictions: # If the player is not in the air
@@ -342,6 +357,12 @@ class GameObject:
       mult = -1 # Set y direction multiplier
     self.xDir = (math.cos(angle) * knockbackMultiplyer * 20) / self.weight # Set new x and y directions
     self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20) / self.weight
+
+  def isOutOfBounds(self) -> bool:
+    return self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000
+    
+  def onOutOfBounds(self):
+    pass
 
 
 # PLATFORM CLASS
@@ -450,6 +471,10 @@ class Player(GameObject):
     # Game stats
     self.stocks = 3
     self.spawnCoords = coords
+    self.hasUlt = False
+
+    # Ult glow image
+    self.ultGlowImage = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/ult_glow.png'), (64, 64))
 
     # Platform info
     self.onTopOfPlatform = None
@@ -457,7 +482,6 @@ class Player(GameObject):
 
 
   def update(self, game) -> None: # Update every frame
-    self.detectIfOutOfBounds()
     self.updateControls()
     super().update(game) # Call super function
     self.drawHoverText()
@@ -468,6 +492,11 @@ class Player(GameObject):
     if image == None:
       pygame.draw.rect(WINDOW, (127, 127, 127), self.rect) # Draw a rectangle, showing the hitbox of the player (DEBUG FEATURE)
     else:
+      # Draw the ult glow if they have ult
+      if self.hasUlt:
+        print(self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2))
+        WINDOW.blit(self.ultGlowImage, (self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2)))
+
       flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
       WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y)) # Put image on screen
 
@@ -631,14 +660,13 @@ class Player(GameObject):
   def incapacitate(self, timeLength):
     self.incapacitatedTimers = (time.time(), timeLength)
 
-  def detectIfOutOfBounds(self) -> None:
-    if self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000: # If the player's coords are out of bounds
-      self.x, self.y = self.spawnCoords # Reset their position
-      self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
-      self.stocks -= 1 # Remove one from their stocks
-      self.setPercentage(0)
-      self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
-      self.resetAbilities() # Reset abilties
+  def onOutOfBounds(self) -> None:
+    self.x, self.y = self.spawnCoords # Reset their position
+    self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
+    self.stocks -= 1 # Remove one from their stocks
+    self.setPercentage(0)
+    self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
+    self.resetAbilities() # Reset abilties
 
   def changeSize(self, newDimensions) -> None:
     previousWidth, previousHeight = self.width, self.height # Save previous sizes
@@ -778,9 +806,9 @@ class Player(GameObject):
   def resetAbilities(self) -> None:
     self.remainingAirJumps = self.totalAirJumps
 
-  def onNormalAttack(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     if not self.shieldActive: # If player shield is down
-      super().onNormalAttack(sourceCoords, damage, knockbackMultiplyer * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
+      super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
       self.setPercentage(self.percentage + damage)
 
 
@@ -828,10 +856,10 @@ class BarrelMan(Player):
     return False
   
   def pressedFirstAbility(self) -> None:
-    hitPlayer = self.game.hitPlayer(self) # Find a hit player
-    if hitPlayer != None: # If there is a hit player
+    hitObj = self.game.hitObject(self) # Find a hit player
+    if hitObj != None: # If there is a hit player
       self.releaseFirstAbility() # End the ability
-      hitPlayer.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 36, 1.8) # Launch player
+      hitObj.onNormalAttack(self, (self.x + (self.width / 2), self.y + (self.height / 2)), 36, 1.8) # Launch player
     if time.time() - self.rollTimer > 1.5:
       self.releaseFirstAbility()
 
@@ -897,7 +925,7 @@ class Pog(Player):
         player = game.players[i]
         if self != player: # If the player is not themselves
           if self.rect.colliderect(player.rect) and not player in self.hitPlayers: # If player hits Pog
-            player.onNormalAttack((self.x, self.y), 19, 1.25) # Punch the player
+            player.onNormalAttack(self, (self.x, self.y), 19, 1.25) # Punch the player
             self.hitPlayers.append(player) # Set player to be hit by Pog
             self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
           else:
@@ -1016,7 +1044,7 @@ class ErrorPlayer(Player):
       platform.glitch(self, 5)
       for player in self.game.players: # Launch all enemy players
         if player.onTopOfPlatform == platform:
-          player.onNormalAttack((player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
+          player.onNormalAttack(self, (player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
     super().onLandOnPlatform(platform)
 
   def draw(self) -> None:
@@ -1079,11 +1107,14 @@ class Obstacle(GameObject):
     self.game = game
     self.immunePlayer = immunePlayer
     self.timer = timer
-    self.detectHitPlayers = []
-    self.currentlyHitPlayers = []
+    self.detectHitObjects = []
+    self.currentlyHitObjects = []
     for player in game.players: # Loop through player list, add all players except immune player to detectable players
       if player != self.immunePlayer:
-        self.detectHitPlayers.append(player)
+        self.detectHitObjects.append(player)
+    for obstacle in game.obstacles:
+      if obstacle.punchable:
+        self.detectHitObjects.append(obstacle)
     self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
     
 
@@ -1102,21 +1133,52 @@ class Obstacle(GameObject):
     self.mustBeRemoved = True # Remove obstacle
   
   def detectCollision(self) -> None:
-    for player in self.detectHitPlayers: # Loop through applicable players
-      if self.rect.colliderect(player.rect) and not player in self.currentlyHitPlayers:
+    for player in self.detectHitObjects: # Loop through applicable players
+      if self.rect.colliderect(player.rect) and not player in self.currentlyHitObjects:
         self.onCollision(player) # Hit player, make sure they are not hit twice before their rectangles are not colliding
-        self.currentlyHitPlayers.append(player)
-      elif not self.rect.colliderect(player.rect) and player in self.currentlyHitPlayers:
-        self.currentlyHitPlayers.remove(player)
+        self.currentlyHitObjects.append(player)
+      elif not self.rect.colliderect(player.rect) and player in self.currentlyHitObjects:
+        self.currentlyHitObjects.remove(player)
   
   def onCollision(self, gameObject): # Code that runs when a player hits the obstacle
     pass
+
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
+    super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * 2, ignoreGroundRestrictions)
+
+class UltBall(Obstacle):
+
+  def __init__(self, game):
+    super().__init__(game, (0, 0), pygame.image.load('assets/images/objects/ult_ball.png'))
+    self.usesGravity = True
+    self.health = 100
+    self.punchable = True
+    self.redoSpawn()
+
+  def redoSpawn(self):
+    self.x = random.randint(100, WINDOW_SIZE[0] - 100)
+    self.y = -100
+    self.xDir = 0
+    self.yDir = 0
+
+  def onOutOfBounds(self):
+    self.redoSpawn()
+
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
+    super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer, ignoreGroundRestrictions)
+    self.health -= damage
+    if self.health <= 0:
+      source.hasUlt = True
+      self.mustBeRemoved = True
+      self.game.currUltBall = None
+      self.game.ultBallTimer = 60
 
 class VeryLongSword(Obstacle):
 
   def __init__(self, game, coords, shotBy):
     super().__init__(game, coords, pygame.image.load("assets/images/objects/verylongsword.png"), shotBy, 6)
     self.attachedToPlayer = shotBy # Track who created the Very Long Sword
+    self.shotBy = shotBy
 
   def update(self, game):
     super().update(game)
@@ -1128,7 +1190,7 @@ class VeryLongSword(Obstacle):
         self.y -= 10
 
   def onCollision(self, gameObject) -> None:
-    gameObject.onNormalAttack((self.x, self.y), 11, 0.6) # Hit any colliding players
+    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 11, 0.6) # Hit any colliding players
 
 class Dagger(Obstacle):
 
@@ -1140,9 +1202,10 @@ class Dagger(Obstacle):
     self.usesGravity = True
     self.stuck = False # Track whether the dagger should continue moving
     self.stuckTime = 7 # Time the dagger should stay once it hits a platform
+    self.shotBy = shotBy
 
   def onCollision(self, gameObject) -> None:
-    gameObject.onNormalAttack((self.x, self.y), 8, 0.35) # Hit any colliding players
+    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 8, 0.35) # Hit any colliding players
 
   def update(self, game) -> None:
     if not self.stuck:
@@ -1169,6 +1232,7 @@ class PogProjectile(Obstacle):
   def __init__(self, game, shotBy, power):
     self.power = power
     self.size = 12 + (self.power * 50) # Set size of projectile
+    self.shotBy = shotBy
 
     super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/objects/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
     self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4) # Set coords of the projectile spawning
@@ -1178,7 +1242,7 @@ class PogProjectile(Obstacle):
       self.xDir = -5 - (power * 3)
 
   def onCollision(self, gameObject) -> None:
-    gameObject.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
+    gameObject.onNormalAttack(self.shotBy, (self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
 
 class PogBomb(Obstacle):
 
@@ -1188,6 +1252,7 @@ class PogBomb(Obstacle):
     self.bombImage2 = pygame.transform.scale(pygame.image.load('assets/images/objects/pog_bomb2.png'), (self.size, self.size))
     self.currImageFlipper = True # Track which of the two primed bomb texture should be displayed
     self.currImageFlipTimer = time.time()
+    self.shotBy = shotBy
 
     self.explosion = util.CircularExplosion(150, AnimatedSprite(pygame.image.load('assets/images/explosions/pog_explosion.png'), (0, 0), 0.02, 100))
 
@@ -1229,7 +1294,7 @@ class PogBomb(Obstacle):
           self.onCollision(obstacle)
 
   def onCollision(self, gameObject) -> None:
-    gameObject.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
+    gameObject.onNormalAttack(self.shotBy, (self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
 
 class GlitchBomb(Obstacle):
 
@@ -1258,7 +1323,7 @@ class GlitchBomb(Obstacle):
   
   def detectCollision(self) -> None:
     if self.explosion.isExploding: # Make sure the explosion circle exists
-      for player in self.detectHitPlayers: # Hit a player if they hit the explosion
+      for player in self.detectHitObjects: # Hit a player if they hit the explosion
         if self.explosion.hitGameObject(player):
           player.incapacitate(1.5)
 
