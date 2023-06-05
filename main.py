@@ -223,8 +223,13 @@ class Game:
     # Player attack box collisions
     for player in self.players:
       for hitPlayer in self.players:
-        if player.attackBox != None and player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
-          hitPlayer.punched((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
+        if player.attackBox != None:
+          if player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
+            hitPlayer.onNormalAttack((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
+          else:
+            for obstacle in self.obstacles:
+              if player.attackBox.colliderect(obstacle.rect):
+                obstacle.onNormalAttack((player.x + (player.width / 2), player.y + (player.height / 2)), 10)
     
     removableObstacles = [] # List of obstacles to remove (obstacles cannot be removed from the list when in the middle of looping through that list)
     for obstacle in self.obstacles: # Update the obstacle
@@ -277,8 +282,14 @@ class GameObject:
     # Set usage of gravity
     self.usesGravity = False
 
+    # Set weight
+    self.weight = 5
+
     # Set if object is in the air
     self.inAir = True
+
+    # Set attack stats
+    self.punchable = False
 
   def update(self, game) -> None:
     self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
@@ -313,11 +324,24 @@ class GameObject:
 
   def hitPlatformFromBottom(self, platform) -> None: # Code used to hit platform from the bottom
     self.y = platform.rect.top - self.height # Set y position so bottom of object is touching the platform
+    self.xDir = 0
     if self.yDir > 20: # Bounce object 
       self.yDir *= -1
     else:
       self.yDir = 0 # Stop the object from moving
       self.inAir = False
+
+  def onNormalAttack(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
+    mult = 1
+    angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
+    if not self.inAir and not ignoreGroundRestrictions: # If the player is not in the air
+      if angle < math.pi * (1 / 4): # If hitting angle is too low or too high, set it so the player can lift off the ground
+        angle = math.pi * (1 / 4)
+      elif angle > math.pi * (3 / 4):
+        angle = math.pi * (3 / 4)
+      mult = -1 # Set y direction multiplier
+    self.xDir = (math.cos(angle) * knockbackMultiplyer * 20) / self.weight # Set new x and y directions
+    self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20) / self.weight
 
 
 # PLATFORM CLASS
@@ -344,19 +368,19 @@ class Platform(GameObject):
     super().update(game)
 
   def updateGlitchedPlatform(self, game) -> None:
-    if self.glitchedPlatformSource != None:
+    if self.glitchedPlatformSource != None: # If the platform is glitched
       for player in game.players:
-        if player.onTopOfPlatform == self:
-          if self.glitchedPlatformSource == player:
+        if player.onTopOfPlatform == self: # Do a certain effect depending on which players are on top of the platform
+          if self.glitchedPlatformSource == player: # Player is the glitched platform source: subtract from their percentage
             player.setPercentage(player.percentage - (deltaT * 0.5))
-          else:
+          else: # Other players: add to their percentage
             player.setPercentage(player.percentage + (deltaT))
-      if time.time() - self.glitchedTimer[0] > self.glitchedTimer[1]:
+      if time.time() - self.glitchedTimer[0] > self.glitchedTimer[1]: # Unglitch the platform once time runs out
         self.glitchedPlatformSource = None
 
   def glitch(self, source, timeLength):
-    self.glitchedPlatformSource = source
-    self.glitchedTimer = (time.time(), timeLength)
+    self.glitchedPlatformSource = source # Set source
+    self.glitchedTimer = (time.time(), timeLength) # Set timer
     
     
 
@@ -412,6 +436,7 @@ class Player(GameObject):
     # Attacking
     self.attackBox = None # Finish tomorrow
     self.percentage = 0
+    self.punchable = True
 
     # Pointer image
     self.pointerImg = pygame.image.load('assets/images/character_visuals/character_pointer.png')
@@ -753,18 +778,9 @@ class Player(GameObject):
   def resetAbilities(self) -> None:
     self.remainingAirJumps = self.totalAirJumps
 
-  def punched(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
+  def onNormalAttack(self, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     if not self.shieldActive: # If player shield is down
-      mult = 1
-      angle = math.atan2(self.y + (self.height / 2) - sourceCoords[1], self.x + (self.width / 2) - sourceCoords[0]) # Get angle between player and soure of knockback
-      if not self.inAir and not ignoreGroundRestrictions: # If the player is not in the air
-        if angle < math.pi * (1 / 4): # If hitting angle is too low or too high, set it so the player can lift off the ground
-          angle = math.pi * (1 / 4)
-        elif angle > math.pi * (3 / 4):
-          angle = math.pi * (3 / 4)
-        mult = -1 # Set y direction multiplier
-      self.xDir = (math.cos(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight # Set new x and y directions
-      self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20 * ((self.percentage // 50) + 1)) / self.weight
+      super().onNormalAttack(sourceCoords, damage, knockbackMultiplyer * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
       self.setPercentage(self.percentage + damage)
 
 
@@ -815,7 +831,7 @@ class BarrelMan(Player):
     hitPlayer = self.game.hitPlayer(self) # Find a hit player
     if hitPlayer != None: # If there is a hit player
       self.releaseFirstAbility() # End the ability
-      hitPlayer.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 36, 1.8) # Launch player
+      hitPlayer.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 36, 1.8) # Launch player
     if time.time() - self.rollTimer > 1.5:
       self.releaseFirstAbility()
 
@@ -881,7 +897,7 @@ class Pog(Player):
         player = game.players[i]
         if self != player: # If the player is not themselves
           if self.rect.colliderect(player.rect) and not player in self.hitPlayers: # If player hits Pog
-            player.punched((self.x, self.y), 19, 1.25) # Punch the player
+            player.onNormalAttack((self.x, self.y), 19, 1.25) # Punch the player
             self.hitPlayers.append(player) # Set player to be hit by Pog
             self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
           else:
@@ -973,7 +989,7 @@ class ErrorPlayer(Player):
 
   def update(self, game) -> None:
     super().update(game)
-    if (self.downGlitch and (not self.inAir or self.yDir <= 0)) or (self.sideGlitch and self.remainingDist <= 0):
+    if (self.downGlitch and (not self.inAir or self.yDir <= 0)) or (self.sideGlitch and self.remainingDist <= 0): # If player's abilities do not require player to be in glitched mode, turn it off and reset any limitations
       self.glitchedMode = False
       self.speedLocked = False
       if self.downGlitch:
@@ -983,28 +999,28 @@ class ErrorPlayer(Player):
     if not self.inAir:
       self.firstAbilityMovement = True
 
-    if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource:
+    if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource: # If a platform player is glitching passes its allowed glitch time, make sure the player knows as well
       self.currGlitchedPlatform = None
 
   def move(self, deltaT) -> None:
-    if not self.sideGlitch:
+    if not self.sideGlitch: # move as normal
       super().move(deltaT)
     else:
-      dist = 0.5 / deltaT
+      dist = 0.5 / deltaT # If side glitching, move the player towards the side
       self.x += dist * self.direction
       self.remainingDist -= dist
 
   def onLandOnPlatform(self, platform) -> None:
-    if self.glitchedMode and self.currGlitchedPlatform == None:
-      self.currGlitchedPlatform = platform
+    if self.glitchedMode and self.currGlitchedPlatform == None: # If the player is using their down ability and don't already have a glitched latform
+      self.currGlitchedPlatform = platform # Glitch platform and record it
       platform.glitch(self, 5)
-      for player in self.game.players:
+      for player in self.game.players: # Launch all enemy players
         if player.onTopOfPlatform == platform:
-          player.punched((player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
+          player.onNormalAttack((player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
     super().onLandOnPlatform(platform)
 
   def draw(self) -> None:
-    if self.glitchedMode:
+    if self.glitchedMode: # If in glitch mode, draw the glitch img
       self.glitchedImage.x = self.x
       self.glitchedImage.y = self.y
       self.glitchedImage.update()
@@ -1012,8 +1028,8 @@ class ErrorPlayer(Player):
       super().draw(self.mainImage)
 
   def activateDownwardsAbility(self) -> bool:
-    if not self.sideGlitch:
-      self.glitchedMode = True
+    if not self.sideGlitch: # Use down ability if side ability is off
+      self.glitchedMode = True # Launch player directly downwards
       self.yDir = 15
       self.speedLocked = True
       self.xDir = 0
@@ -1021,8 +1037,8 @@ class ErrorPlayer(Player):
     return super().activateDownwardsAbility()
   
   def activateFirstAbility(self) -> bool:
-    if not self.downGlitch:
-      if self.activeBomb == None and self.firstAbilityMovement:
+    if not self.downGlitch: # Use side ability if down ability is off and no glitch bomb is in place
+      if self.activeBomb == None and self.firstAbilityMovement: # Launch player sideways a certain distance
         self.remainingDist = 200
         self.sideGlitch = True
         self.glitchedMode = True
@@ -1030,17 +1046,17 @@ class ErrorPlayer(Player):
         self.xDir = 0
         self.yDir = 0
         self.firstAbilityMovement = False
-        if time.time() - self.bombCooldown >= 5:
+        if time.time() - self.bombCooldown >= 5: # If the last time this ability is used is greater than 5 seconds, create a glitch bomb
           newBomb = GlitchBomb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)))
           self.activeBomb = newBomb
           self.game.obstacles.append(newBomb)
           self.bombCooldown = time.time()
       elif self.activeBomb != None:
-        self.activeBomb.detonate()
+        self.activeBomb.detonate() # Detonate the bomb
         self.activeBomb = None
     return super().activateFirstAbility()
   
-  def collideWithPlatforms(self, game) -> None:
+  def collideWithPlatforms(self, game) -> None: # If the side glitch effect isn't active, collide with platforms as normal
     if not self.sideGlitch:
       super().collideWithPlatforms(game)
   
@@ -1093,13 +1109,13 @@ class Obstacle(GameObject):
       elif not self.rect.colliderect(player.rect) and player in self.currentlyHitPlayers:
         self.currentlyHitPlayers.remove(player)
   
-  def onCollision(self, player): # Code that runs when a player hits the obstacle
+  def onCollision(self, gameObject): # Code that runs when a player hits the obstacle
     pass
 
 class VeryLongSword(Obstacle):
 
   def __init__(self, game, coords, shotBy):
-    super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/verylongsword.png"), shotBy, 6)
+    super().__init__(game, coords, pygame.image.load("assets/images/objects/verylongsword.png"), shotBy, 6)
     self.attachedToPlayer = shotBy # Track who created the Very Long Sword
 
   def update(self, game):
@@ -1111,13 +1127,13 @@ class VeryLongSword(Obstacle):
         self.attachedToPlayer = None
         self.y -= 10
 
-  def onCollision(self, player) -> None:
-    player.punched((self.x, self.y), 11, 0.6) # Hit any colliding players
+  def onCollision(self, gameObject) -> None:
+    gameObject.onNormalAttack((self.x, self.y), 11, 0.6) # Hit any colliding players
 
 class Dagger(Obstacle):
 
   def __init__(self, game, coords, angle, shotBy):
-    super().__init__(game, coords, pygame.image.load("assets/images/characters/barrel_man/dagger.png"), shotBy, 60)
+    super().__init__(game, coords, pygame.image.load("assets/images/objects/dagger.png"), shotBy, 60)
     self.xDir = 14 * math.cos(angle) # Launch dagger in a particular direction
     self.yDir = 14 * math.sin(angle)
     self.angle = 0
@@ -1125,8 +1141,8 @@ class Dagger(Obstacle):
     self.stuck = False # Track whether the dagger should continue moving
     self.stuckTime = 7 # Time the dagger should stay once it hits a platform
 
-  def onCollision(self, player) -> None:
-    player.punched((self.x, self.y), 8, 0.35) # Hit any colliding players
+  def onCollision(self, gameObject) -> None:
+    gameObject.onNormalAttack((self.x, self.y), 8, 0.35) # Hit any colliding players
 
   def update(self, game) -> None:
     if not self.stuck:
@@ -1154,29 +1170,30 @@ class PogProjectile(Obstacle):
     self.power = power
     self.size = 12 + (self.power * 50) # Set size of projectile
 
-    super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
+    super().__init__(game, (0, 0), pygame.transform.scale(pygame.image.load('assets/images/objects/pog_projectile.png'), (self.size, self.size)), shotBy, 5)
     self.x, self.y = shotBy.x - (self.width / 2), shotBy.y - (self.height / 4) # Set coords of the projectile spawning
     if shotBy.direction > 0: # Set direction of projectile moving, base the speed on power
       self.xDir = 5 + (power * 3)
     else:
       self.xDir = -5 - (power * 3)
 
-  def onCollision(self, player) -> None:
-    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
+  def onCollision(self, gameObject) -> None:
+    gameObject.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 12 * (self.power), 0.9 + (self.power * 0.3)) # Launch hit players and add to their percentagers, based on the power of the projectile
 
 class PogBomb(Obstacle):
 
   def __init__(self, game, shotBy):
     self.size = 36
-    self.bombImage1 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb1.png'), (self.size, self.size)) # Load different images
-    self.bombImage2 = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog_bomb2.png'), (self.size, self.size))
-    self.explosionImage = AnimatedSprite(pygame.image.load('assets/images/characters/pog/pog_explosion.png'), (0, 0), 0.02, 100)
+    self.bombImage1 = pygame.transform.scale(pygame.image.load('assets/images/objects/pog_bomb1.png'), (self.size, self.size)) # Load different images
+    self.bombImage2 = pygame.transform.scale(pygame.image.load('assets/images/objects/pog_bomb2.png'), (self.size, self.size))
     self.currImageFlipper = True # Track which of the two primed bomb texture should be displayed
     self.currImageFlipTimer = time.time()
-    self.isExploding = False # Track whether the bomb is in its primed stage or exploding stage
+
+    self.explosion = util.CircularExplosion(150, AnimatedSprite(pygame.image.load('assets/images/explosions/pog_explosion.png'), (0, 0), 0.02, 100))
+
     super().__init__(game, (shotBy.x + (shotBy.width / 2) - (self.size / 2), shotBy.y + (shotBy.height / 2) - (self.size / 2)), self.bombImage1, None, 1.5)
     self.usesGravity = True
-    self.explosionCircle = None # Variable used to create a circle in its exploding stage
+    self.punchable = True
 
   def update(self, game) -> None:
     super().update(game)
@@ -1185,74 +1202,65 @@ class PogBomb(Obstacle):
       self.currImageFlipTimer = time.time()
 
   def draw(self) -> None:
-    if not self.isExploding:
+    if not self.explosion.isExploding:
       if self.currImageFlipper: # Display a different image based on how long it has been since it was last switched
         WINDOW.blit(self.bombImage1, (self.x, self.y))
       else:
         WINDOW.blit(self.bombImage2, (self.x, self.y))
     else: # Set the explosion coordinates to be at the top left of the texture, and update the animation
-      self.explosionImage.x = self.x + (self.width / 2) - (self.explosionImage.width / 2)
-      self.explosionImage.y = self.y + (self.height / 2) - (self.explosionImage.height / 2)
-      self.explosionImage.update()
+      self.explosion.draw()
 
   def belowZeroTimer(self) -> None:
-    self.explosionImage.scale((300, 300)) # Set the explosion size
-    if not self.isExploding: # On the first frame where the bomb explodes, create the circle
-      self.explosionCircle = util.Circle((self.x, self.y), self.explosionImage.width / 2)
+    if not self.explosion.isExploding: # On the first frame where the bomb explodes, create the circle
+      self.explosion.startExplosion((self.x + (self.width / 2), self.y + (self.height / 2)))
     self.isExploding = True
-    if self.explosionImage.frame == self.explosionImage.lastFrame: # Remove the obstacle if the animation is on its last frame
+    self.punchable = False
+    self.explosion.update()
+    if self.explosion.atEnd: # Remove the obstacle if the animation is on its last frame
       self.mustBeRemoved = True
 
   def detectCollision(self) -> None:
-    if self.explosionCircle != None:
+    if self.explosion.isExploding:
       for player in self.detectHitPlayers:
-        if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
+        if self.explosion.hitGameObject(player):
           self.onCollision(player)
-          self.currentlyHitPlayers.append(player)
-        elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
-          self.currentlyHitPlayers.remove(player)
+      for obstacle in self.game.obstacles:
+        if obstacle.punchable and self.explosion.hitGameObject(obstacle):
+          self.onCollision(obstacle)
 
-  def onCollision(self, player) -> None:
-    player.punched((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
+  def onCollision(self, gameObject) -> None:
+    gameObject.onNormalAttack((self.x + (self.width / 2), self.y + (self.height / 2)), 43, 2.3) # Knockback/damage given
 
 class GlitchBomb(Obstacle):
 
   def __init__(self, game, coords):
     super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/characters/error/missing_textures_pb.png'), (20, 20)))
     self.usesGravity = True
-    self.explosionSprite = AnimatedSprite(pygame.image.load('assets/images/characters/error/glitch_explosion.png'), (self.x, self.y), 0.05, 500)
-    self.explosionSize = 150
-    self.explosionSprite.scale((self.explosionSize, self.explosionSize))
-    self.isExploding = False
-    self.explosionCircle = None
+    self.explosion = util.CircularExplosion(150, AnimatedSprite(pygame.image.load('assets/images/explosions/glitch_explosion.png'), (self.x, self.y), 0.05, 500))
+    self.punchable = True
 
   def draw(self) -> None:
-    if self.isExploding:
-      self.explosionSprite.update()
+    if self.explosion.isExploding:
+      self.explosion.draw()
     else:
       super().draw()
 
   def update(self, game) -> None:
-    if self.isExploding and self.explosionSprite.frame == self.explosionSprite.lastFrame:
+    self.explosion.update()
+    if self.explosion.atEnd: # At end of explosion animation, remove the object
       self.mustBeRemoved = True
     return super().update(game)
   
   def detonate(self):
-    self.isExploding = True
-    self.explosionCircle = util.Circle((self.x, self.y), self.explosionSize / 2)
-    self.x += (self.width / 2) - (self.explosionSize / 2)
-    self.y += (self.height / 2) - (self.explosionSize / 2)
-    self.explosionSprite.x = self.x
-    self.explosionSprite.y = self.y
+    self.isExploding = True # Explode
+    self.explosion.startExplosion((self.x + (self.width / 2), self.y + (self.height / 2)))
+    self.punchable = False # make sure the explosion can't be punched
   
   def detectCollision(self) -> None:
-    if self.explosionCircle != None: # Make sure the explosion circle exists
+    if self.explosion.isExploding: # Make sure the explosion circle exists
       for player in self.detectHitPlayers: # Hit a player if they hit the explosion
-        if util.rectangleCircleCollision(player.rect, self.explosionCircle) and not player in self.currentlyHitPlayers:
+        if self.explosion.hitGameObject(player):
           player.incapacitate(1.5)
-          self.currentlyHitPlayers.append(player) # Make sure the player isn't hit by the explosion twice before leaving the circle
-        elif not util.rectangleCircleCollision(player.rect, self.explosionCircle) and player in self.currentlyHitPlayers:
-          self.currentlyHitPlayers.remove(player)
 
   
 
@@ -1275,11 +1283,11 @@ class AnimatedSprite:
     self.frame = 0
 
   def update(self) -> None:
-    self.timeAtFrame += deltaT
-    if self.timeAtFrame > self.timePerFrame:
+    self.timeAtFrame += deltaT # Track time on frame
+    if self.timeAtFrame > self.timePerFrame: # If time exceeds time needed at frame, move to the next frame
       self.frame += 1
       self.timeAtFrame = 0
-      if self.frame > self.lastFrame:
+      if self.frame > self.lastFrame: # Move back to the initial frame if there are no more frames
         self.frame = 0
     self.draw()
   
@@ -1287,7 +1295,7 @@ class AnimatedSprite:
     WINDOW.blit(self.imgFull, (self.x, self.y), (0, self.frame * self.frameHeight, self.width, self.height))
 
   def scale(self, scaling) -> None:
-    self.width, self.height = scaling
+    self.width, self.height = scaling # Scale the image
     self.frameHeight = self.height
     self.imgFull = pygame.transform.scale(self.imgFull, (self.width, self.height * (self.lastFrame + 1)))
 
@@ -1297,24 +1305,24 @@ class ChangingSprite:
 
   def __init__(self, fullImage, coords, dimensions, timePerPartialImage):
     self.fullImage = fullImage
-    self.x, self.y = coords
-    self.width, self.height = dimensions
-    self.timeDiff = timePerPartialImage
-    self.currTime = 0
-    self.imagePosX = 0
+    self.x, self.y = coords # Position of image
+    self.width, self.height = dimensions # Dimensions of cropped image
+    self.timeDiff = timePerPartialImage # Time before there should be a new crop
+    self.currTime = 0 # Time at crop
+    self.imagePosX = 0 # Corner coords within the full image
     self.imagePosY = 0
 
   def update(self) -> None:
-    self.currTime += deltaT
-    if time.time() - self.currTime >= self.timeDiff:
+    self.currTime += deltaT # ADd to time at crop
+    if time.time() - self.currTime >= self.timeDiff: # Set a new crop if time is exceeded
       self.changeSpritePosition()
-    WINDOW.blit(self.fullImage, (self.x, self.y), (self.imagePosX, self.imagePosY, self.width, self.height))
+    WINDOW.blit(self.fullImage, (self.x, self.y), (self.imagePosX, self.imagePosY, self.width, self.height)) # Blit that part of the image onto the screen
 
   def changeSpritePosition(self):
-    self.imagePosX = random.randint(0, self.fullImage.get_width() - self.width)
+    self.imagePosX = random.randint(0, self.fullImage.get_width() - self.width) # Set new cropped corner coords
     self.imagePosY = random.randint(0, self.fullImage.get_height() - self.height)
 
-  def scale(self, scaling) -> None:
+  def scale(self, scaling) -> None: # Scale the image
     self.fullImage = pygame.transform.scale(self.fullImage, ((self.fullImage.get_width() / self.width) * scaling[0], (self.fullImage.get_height() / self.height) * scaling[1]))
     self.width, self.height = scaling
   
