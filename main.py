@@ -211,7 +211,8 @@ class Game:
       ]
 
     self.currUltBall = None
-    self.ultBallSpawnTime = 3
+    self.ultBallSpawnTimeDelay = 3
+    self.ultBallSpawnTime = self.ultBallSpawnTimeDelay
 
   def update(self) -> None:
     # Update players
@@ -230,7 +231,7 @@ class Game:
             hitPlayer.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
           else:
             for obstacle in self.obstacles:
-              if player.attackBox.colliderect(obstacle.rect):
+              if player.attackBox.colliderect(obstacle.rect) and obstacle.punchable:
                 obstacle.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
     
     removableObstacles = [] # List of obstacles to remove (obstacles cannot be removed from the list when in the middle of looping through that list)
@@ -382,7 +383,7 @@ class Platform(GameObject):
     if self.glitchedPlatformSource != None:
       self.glitchedImg.update()
     else:
-      pygame.draw.rect(WINDOW, (241, 241, 241), self.rect) # Draw the platform
+      pygame.draw.rect(WINDOW, (167, 167, 167), self.rect) # Draw the platform
 
   def update(self, game) -> None:
     self.updateGlitchedPlatform(game)
@@ -411,7 +412,6 @@ class Player(GameObject):
   # Variables that tell whether the ability should be held or not
   firstAbilityIsHeld = False
   secondAbilityIsHeld = False
-  ultAbilityIsHeld = False
   downwardsAbilityIsHeld = False
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
@@ -486,7 +486,10 @@ class Player(GameObject):
     super().update(game) # Call super function
     self.drawHoverText()
     self.detectControls()
-    self.updateAbilities()
+    if isinstance(self.activeAbilities['ult'], float):
+      self.duringUltAbility()
+      if self.activeAbilities['ult'] <= 0:
+        self.endUltAbility()
 
   def draw(self, image = None) -> None:
     if image == None:
@@ -494,7 +497,6 @@ class Player(GameObject):
     else:
       # Draw the ult glow if they have ult
       if self.hasUlt:
-        print(self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2))
         WINDOW.blit(self.ultGlowImage, (self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2)))
 
       flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
@@ -534,7 +536,7 @@ class Player(GameObject):
         self.secondAbilityControlHeld = mTapped
         self.shieldControl = hPressed
         self.punchControl = bTapped
-        self.ultControl = bTapped and self.xDir == 0
+        self.ultControl = nTapped and self.xDir == 0
       elif self.playerSide == 'right':
         self.leftControl = leftPressed
         self.rightControl = rightPressed
@@ -547,7 +549,7 @@ class Player(GameObject):
         self.secondAbilityControlHeld = num3Pressed
         self.shieldControl = num5Pressed
         self.punchControl = num1Tapped
-        self.ultControl = num1Tapped and self.xDir == 0
+        self.ultControl = num2Tapped and self.xDir == 0
     else:
       self.leftControl = False
       self.rightControl = False
@@ -626,15 +628,14 @@ class Player(GameObject):
     if self.downControl and self.inAir: # Use downwards ability if s is pressed
       if self.activateDownwardsAbility() and self.downwardsAbilityIsHeld:
         self.activeAbilities['down'] = True
+    elif self.ultControl and self.activeAbilities['ult'] == False and self.hasUlt: # Use ult ability if second ability key is pressed
+      self.activateUltAbility()
     elif self.firstAbilityControl and self.activeAbilities['first'] == False: # Use first ability if first ability key is pressed
       if self.activateFirstAbility() and self.firstAbilityIsHeld:
         self.activeAbilities['first'] = True
     elif self.secondAbilityControl and self.activeAbilities['second'] == False: # Use second ability if second ability key is pressed
       if self.activateSecondAbility() and self.secondAbilityIsHeld:
         self.activeAbilities['second'] = True
-    elif self.ultControl and self.activeAbilities['ult'] == False: # Use second ability if second ability key is pressed
-      if self.activateUltAbility() and self.ultAbilityIsHeld:
-        self.activeAbilities['ult'] = True
     if self.punchControl:
       self.punch()
     else:
@@ -681,37 +682,6 @@ class Player(GameObject):
     if self.percentage < 0:
       self.percentage = 0
     self.game.statDisplay[self][0].setText(f'{round(self.percentage, 1)}%')
-
-
-  def updateAbilities(self) -> None:
-
-    # FIRST ABILITY UPDATE
-    if type(self.activeAbilities['first']) == list:
-      if self.duringFirstAbility():
-        self.activeAbilities['first'][0] -= deltaT
-        if (self.activeAbilities['first'][0] <= 0) or (self.activeAbilities['first'][1] and self.firstAbilityControl):
-          self.endFirstAbility()
-
-    # SECOND ABILITY UPDATE
-    if type(self.activeAbilities['second']) == list:
-      if self.duringSecondAbility():
-        self.activeAbilities['second'][0] -= deltaT
-        if (self.activeAbilities['second'][0] <= 0) or (self.activeAbilities['second'][1] and self.secondAbilityControl):
-          self.endSecondAbility()
-
-    # DOWNWARDS ABILITY UPDATE
-    if type(self.activeAbilities['down']) == list:
-      if self.duringDownAbility():
-        self.activeAbilities['down'][0] -= deltaT
-        if (self.activeAbilities['down'][0] <= 0) or (self.activeAbilities['down'][1] and self.downControl):
-          self.endDownAbility()
-
-    # ULT ABILITY UPDATE
-    if type(self.activeAbilities['ult']) == list:
-      if self.duringUltAbility():
-        self.activeAbilities['ult'][0] -= deltaT
-        if (self.activeAbilities['ult'][0] <= 0) or (self.activeAbilities['ult'][1] and self.ultControl):
-          self.endUltABility()
     
 
   # FIRST ABILITY:
@@ -729,12 +699,6 @@ class Player(GameObject):
       self.activeAbilities['first'] = [time, endable]
     else:
       self.activeAbilities['first'] = False
-  
-  def duringFirstAbility(self) -> bool: # IF ABILITY IS TIMED: RUN WHILE ABILITY IS ACTIVE
-    return False
-  
-  def endFirstAbility(self) -> None: # IF ABILITY IS TIMED: RUN WHEN ABILITY ENDS
-    self.activeAbilities['first'] = False
 
   # SECOND ABILITY
   def activateSecondAbility(self, time = 0, endable = False) -> bool:
@@ -752,12 +716,6 @@ class Player(GameObject):
     else:
       self.activeAbilities['second'] = False
   
-  def duringSecondAbility(self) -> None:
-    return False
-  
-  def endSecondAbility(self) -> None:
-    self.activeAbilities['second'] = False
-  
   # DOWNWARDS ABILITY
   def activateDownwardsAbility(self, time = 0, endable = False) -> bool:
     self.downControl = False
@@ -774,32 +732,16 @@ class Player(GameObject):
     else:
       self.activeAbilities['down'] = False
   
-  def duringDownAbility(self) -> None:
-    return False
-  
-  def endDownAbility(self) -> None:
-    self.activeAbilities['down'] = False
-  
   # ULT ABILITY
-  def activateUltAbility(self, time = 0, endable = False) -> bool:
+  def activateUltAbility(self, time = 0) -> None:
     self.ultControl = False
-    if time > 0 and not self.secondAbilityIsHeld:
-      self.activeAbilities['ult'] = [time, endable]
-    return True
+    self.activeAbilities['ult'] = float(time)
+    self.hasUlt = False
   
-  def pressedUltAbility(self) -> None:
-    pass;
+  def duringUltAbility(self) -> None:
+    self.activeAbilities['ult'] -= deltaT
 
-  def releaseUltAbility(self, time = 0, endable = False) -> None:
-    if time > 0 and not self.ultAbilityIsHeld:
-      self.activeAbilities['ult'] = [time, endable]
-    else:
-      self.activeAbilities['ult'] = False
-  
-  def duringUltAbility(self) -> bool:
-    return False
-  
-  def endUltABility(self) -> None:
+  def endUltAbility(self) -> None:
     self.activeAbilities['ult'] = False
 
   # RESET ABILITIES (when a stock is lost)
@@ -835,6 +777,11 @@ class BarrelMan(Player):
 
     # Downwards ability
     self.sword = None
+
+    # ult ability
+    self.bounceMechanic = False
+    self.ultSize = (64, 64)
+    self.ultImage = pygame.transform.scale(pygame.image.load('assets/images/characters/barrel_man/barrel_man_roll.png'), self.ultSize)
   
   def update(self, game) -> None:
     if self.sword != None and not self.sword.attachedToPlayer:
@@ -844,6 +791,8 @@ class BarrelMan(Player):
   def draw(self) -> None:
     if self.activeAbilities['first'] != False: # Draw normal image if no abilities are used
       super().draw(self.rollImage)
+    elif self.activeAbilities['ult'] != False:
+      super().draw(self.ultImage)
     else: # Draw rolling image if an ability requiring Barrel Man to roll is used
       super().draw(self.image)
 
@@ -882,6 +831,17 @@ class BarrelMan(Player):
     self.game.obstacles.append(self.sword) # Create a very long sword, which will stick to the player until it hits the ground
     self.yDir = 15 # Set y-dir of player to be 15
     self.remainingAirJumps = 0 # Make sure barrel man cannot double jump afterwards
+
+  def activateUltAbility(self) -> None:
+    super().activateUltAbility(5)
+    self.changeSize((72, 72))
+    self.bounceMechanic = True
+
+  def endUltAbility(self) -> None:
+    super().endUltAbility()
+    self.bounceMechanic = False
+    self.changeSize((32, 32))
+
 
   def resetAbilities(self) -> None:
     self.speedLocked = False # Turn off speedlock
@@ -1171,7 +1131,7 @@ class UltBall(Obstacle):
       source.hasUlt = True
       self.mustBeRemoved = True
       self.game.currUltBall = None
-      self.game.ultBallTimer = 60
+      self.game.ultBallSpawnTime = self.game.ultBallSpawnTimeDelay
 
 class VeryLongSword(Obstacle):
 
@@ -1286,7 +1246,7 @@ class PogBomb(Obstacle):
 
   def detectCollision(self) -> None:
     if self.explosion.isExploding:
-      for player in self.detectHitPlayers:
+      for player in self.detectHitObjects:
         if self.explosion.hitGameObject(player):
           self.onCollision(player)
       for obstacle in self.game.obstacles:
