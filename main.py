@@ -737,7 +737,6 @@ class Player(GameObject):
   def activateUltAbility(self, time = 0) -> None:
     self.ultControl = False
     self.activeAbilities['ult'] = float(time)
-    print("A")
     self.hasUlt = False
   
   def duringUltAbility(self) -> None:
@@ -745,7 +744,6 @@ class Player(GameObject):
 
   def endUltAbility(self) -> None:
     self.activeAbilities['ult'] = False
-    print("B")
 
   # RESET ABILITIES (when a stock is lost)
   def resetAbilities(self) -> None:
@@ -782,13 +780,12 @@ class BarrelMan(Player):
     self.sword = None
 
     # ult ability
-    self.hasUlt = True # TESTING CODE
-
     self.bounceMechanic = False
     self.constSpeed = 15
     self.ultSize = (64, 64)
     self.ultCircle = util.Circle((0, 0), self.ultSize[0] / 2)
     self.ultImage = pygame.transform.scale(pygame.image.load('assets/images/characters/barrel_man/barrel_man_roll.png'), self.ultSize)
+    self.ultHitPlayers = []
   
   def update(self, game) -> None:
     if self.sword != None and not self.sword.attachedToPlayer:
@@ -854,10 +851,11 @@ class BarrelMan(Player):
       self.xDir = -self.constSpeed
     self.yDir = self.constSpeed
     self.y -= (self.height / 2) - (prevHeight / 2)
-    print(self.activeAbilities['ult'])
 
   def duringUltAbility(self) -> None:
-    if self.x < 0:
+
+    # COLLISION WITH BORDER OF SCREEN
+    if self.x < 0: 
       self.xDir = abs(self.xDir)
       self.x = 0
     if self.x > WINDOW_SIZE[0] - self.width:
@@ -869,12 +867,25 @@ class BarrelMan(Player):
     if self.y > WINDOW_SIZE[1] - self.height:
       self.yDir = -abs(self.yDir)
       self.y = WINDOW_SIZE[1] - self.height
+
+    # COLLISIONS WITH PLATFORMS: BOUNCE OFF THEM
     for platform in self.game.platforms:
       collisionInfo = util.rectangleCollision(self.rect, platform.rect)
       if (collisionInfo[util.COLLIDE_TOP] and self.yDir < 0) or (collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0):
         self.yDir *= -1
       if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
         self.xDir *= -1
+
+    # HIT PLAYERS
+    for player in self.game.players:
+      collided = util.rectangleCircleCollision(player.rect, self.ultCircle) # See if the circle and player has collided
+      if player != self:
+        if collided and not player in self.ultHitPlayers: # If they have, and they were not already collided, do an attack against the player
+          player.onNormalAttack(self, (self.x, self.y), 30, 3.1)
+          self.ultHitPlayers.append(player)
+        elif not collided and player in self.ultHitPlayers: # If the player is no longer collided with the circle, remove it from the collided list
+          self.ultHitPlayers.remove(player)
+
     super().duringUltAbility()
 
   def endUltAbility(self) -> None:
@@ -884,7 +895,6 @@ class BarrelMan(Player):
     self.usesGravity = True
 
   def move(self) -> None:
-    print(self.direction)
     if self.activeAbilities['ult'] != False:
       self.x += self.constSpeed * self.direction * 0.015 / deltaT # Change x and y positions based on time between frames and directions
       self.y += self.yDir * 0.015 / deltaT
@@ -913,6 +923,7 @@ class Pog(Player):
     self.weight = 5 # Set base stats
     self.jumpingPower = 25
     self.totalAirJumps = 4
+    self.regularSize = (self.width, self.height)
 
     # FIRST ABILITY
     self.firstAbilityCooldownTimer = 0
@@ -921,27 +932,31 @@ class Pog(Player):
 
     # SECOND ABILITY
     self.isBig = False
-    self.hitPlayers = [] # Set players that this ability has hit
-    self.hitPlayersTimer = [] # set players that this ability cannot hit until timer is done
+    self.hitObjects = [] # Set players that this ability has hit
 
     # DOWN ABILITY
     self.releasedBomb = False
 
+    # ULT ABILITY
+    self.ultSize = [300, 425, 550]
+    self.ultCircle = util.Circle((0, 0), self.ultSize[0] / 2)
+    self.lockedX, self.lockedY = 0, 0
+    self.timeAtSizeChange = 0
+    self.currSizeIndex = 0
+
+    self.hasUlt = True
+
   def update(self, game) -> None:
     super().update(game)
     if self.isBig: # If player is big
-      for i in range(len(game.players)): # Loop through players using an index
-        player = game.players[i]
-        if self != player: # If the player is not themselves
-          if self.rect.colliderect(player.rect) and not player in self.hitPlayers: # If player hits Pog
-            player.onNormalAttack(self, (self.x, self.y), 19, 1.25) # Punch the player
-            self.hitPlayers.append(player) # Set player to be hit by Pog
-            self.hitPlayersTimer.append(time.time()) # Set player so they cannot be hit again by Pog for 0.5 seconds
-          else:
-            for j in range(len(self.hitPlayers)):
-              if player in self.hitPlayers and time.time() - self.hitPlayersTimer[j] >= 0.5: # If the player is not hitting Pog and the cooldown timer has passed, remove both the player and the cooldown timer from their lists
-                self.hitPlayersTimer.pop(j)
-                self.hitPlayers.pop(j)
+      for gameObject in game.players + game.obstacles: # Loop through players
+        if self != gameObject: # If the player is not themselves
+          collide = self.rect.colliderect(gameObject.rect)
+          if collide and not gameObject in self.hitObjects and gameObject.punchable: # If player hits Pog
+            gameObject.onNormalAttack(self, (self.x, self.y), 19, 1.25) # Punch the player
+            self.hitObjects.append(gameObject) # Set player to be hit by Pog
+          elif not collide and gameObject in self.hitObjects:
+            self.hitObjects.remove(gameObject)
     if not self.inAir:
       self.releasedBomb = False
 
@@ -986,8 +1001,52 @@ class Pog(Player):
       self.remainingAirJumps = 5
       self.jumpingPower = 24
       self.weight = 5
+      self.hitObjects.clear() # Make sure no objects are in this list when shrinking
     self.isBig = not self.isBig
     return super().activateSecondAbility()
+  
+  def activateUltAbility(self) -> None:
+    super().activateUltAbility(3) # Activate ult for 3 seconds
+    self.ultCircle.x = self.x + (self.width / 2) # Set coordinates for collision circle
+    self.ultCircle.y = self.y + (self.height / 2)
+    self.changeSize((self.ultSize[0], self.ultSize[0])) # Change size of image
+    self.lockedX, self.lockedY = self.x, self.y # Set x and y variables to be locked in during this time
+    self.speedLocked = True # Make sure xDir cannot be influenced during ult
+    self.xDir = 0 # Set xDir and yDir to be 0
+    self.yDir = 0
+    self.usesGravity = False # Turn off gravity for Pog
+    self.timeAtSizeChange = time.time() # Set time, so Pog knows when to change size
+
+  def duringUltAbility(self) -> None:
+    super().duringUltAbility()
+    self.x, self.y = self.lockedX, self.lockedY # Set coords
+    for gameObject in self.game.players + self.game.obstacles: # Loop through players and obstacles
+      collide = util.rectangleCircleCollision(gameObject.rect, self.ultCircle) # Get collision info for circle and object
+      if gameObject != self and collide and not gameObject in self.hitObjects and gameObject.punchable: # If it can, hit the object
+        gameObject.onNormalAttack(self, (self.ultCircle.x, self.ultCircle.y), 41, 4.5)
+        self.hitObjects.append(gameObject) # Add to list so it cannot be punched twice while already in collision influence
+      elif not collide and gameObject in self.hitObjects: # Remove any objects that left the circle
+        self.hitObjects.remove(gameObject)
+    
+    if time.time() - self.timeAtSizeChange >= 1 and self.currSizeIndex < len(self.ultSize): # Every 1 second:
+      self.timeAtSizeChange = time.time() # Reset ult size change timer
+      self.currSizeIndex += 1 # Look at next size in the list and change sizes
+      self.changeSize((self.ultSize[self.currSizeIndex], self.ultSize[self.currSizeIndex]))
+      self.lockedX = self.x # Set the new lockedX/Y to be the new coords
+      self.lockedY = self.y
+      self.ultCircle.radius = self.ultSize[self.currSizeIndex] / 2 # Set radius of circle to fit the new size
+
+  def endUltAbility(self) -> None:
+    super().endUltAbility()
+    self.changeSize(self.regularSize) # Go back to regular size
+    self.speedLocked = False # Go back to normal player settings
+    self.usesGravity = True
+    self.hitObjects.clear() # Clear this list
+    self.currSizeIndex = 0
+
+  def collideWithPlatforms(self, game) -> None:
+    if self.activeAbilities['ult'] == False:
+      super().collideWithPlatforms(game)
   
   def resetAbilities(self) -> None:
     self.isBig = False # Become small again, give the small properties back
@@ -1001,7 +1060,7 @@ class Pog(Player):
 
   def changeSize(self, newDimensions) -> None:
     super().changeSize(newDimensions) # Change size when Pog switches sizes
-    self.image = pygame.transform.scale(self.image, newDimensions)
+    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), newDimensions) # Image bugs out after changing sizes a lot, so this should stop it
 
 # ERROR PLAYER CLASS
 
