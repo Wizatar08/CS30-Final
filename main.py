@@ -310,13 +310,13 @@ class GameObject:
       self.gravity()
       if not isinstance(self, Platform):
         self.collideWithPlatforms(game)
-    self.move(deltaT) # move object
+    self.move() # move object
     self.draw() # draw object
     
     if self.isOutOfBounds():
       self.onOutOfBounds()
 
-  def move(self, deltaT) -> None:
+  def move(self) -> None:
     self.x += self.xDir * 0.015 / deltaT # Change x and y positions based on time between frames and directions
     self.y += self.yDir * 0.015 / deltaT
 
@@ -625,19 +625,20 @@ class Player(GameObject):
         self.remainingAirJumps -= 1
       elif not self.inAir: # Jump if on surface
         self.yDir = -self.jumpingPower / self.weight
-    if self.downControl and self.inAir: # Use downwards ability if s is pressed
-      if self.activateDownwardsAbility() and self.downwardsAbilityIsHeld:
-        self.activeAbilities['down'] = True
-    elif self.ultControl and self.activeAbilities['ult'] == False and self.hasUlt: # Use ult ability if second ability key is pressed
-      self.activateUltAbility()
-    elif self.firstAbilityControl and self.activeAbilities['first'] == False: # Use first ability if first ability key is pressed
-      if self.activateFirstAbility() and self.firstAbilityIsHeld:
-        self.activeAbilities['first'] = True
-    elif self.secondAbilityControl and self.activeAbilities['second'] == False: # Use second ability if second ability key is pressed
-      if self.activateSecondAbility() and self.secondAbilityIsHeld:
-        self.activeAbilities['second'] = True
-    if self.punchControl:
-      self.punch()
+    if self.activeAbilities['ult'] == False:
+      if self.downControl and self.inAir: # Use downwards ability if s is pressed
+        if self.activateDownwardsAbility() and self.downwardsAbilityIsHeld:
+          self.activeAbilities['down'] = True
+      elif self.ultControl and self.hasUlt: # Use ult ability if second ability key is pressed
+        self.activateUltAbility()
+      elif self.firstAbilityControl and self.activeAbilities['first'] == False: # Use first ability if first ability key is pressed
+        if self.activateFirstAbility() and self.firstAbilityIsHeld:
+          self.activeAbilities['first'] = True
+      elif self.secondAbilityControl and self.activeAbilities['second'] == False: # Use second ability if second ability key is pressed
+        if self.activateSecondAbility() and self.secondAbilityIsHeld:
+          self.activeAbilities['second'] = True
+      if self.punchControl:
+        self.punch()
     else:
       self.attackBox = None
     
@@ -736,6 +737,7 @@ class Player(GameObject):
   def activateUltAbility(self, time = 0) -> None:
     self.ultControl = False
     self.activeAbilities['ult'] = float(time)
+    print("A")
     self.hasUlt = False
   
   def duringUltAbility(self) -> None:
@@ -743,6 +745,7 @@ class Player(GameObject):
 
   def endUltAbility(self) -> None:
     self.activeAbilities['ult'] = False
+    print("B")
 
   # RESET ABILITIES (when a stock is lost)
   def resetAbilities(self) -> None:
@@ -779,13 +782,20 @@ class BarrelMan(Player):
     self.sword = None
 
     # ult ability
+    self.hasUlt = True # TESTING CODE
+
     self.bounceMechanic = False
+    self.constSpeed = 15
     self.ultSize = (64, 64)
+    self.ultCircle = util.Circle((0, 0), self.ultSize[0] / 2)
     self.ultImage = pygame.transform.scale(pygame.image.load('assets/images/characters/barrel_man/barrel_man_roll.png'), self.ultSize)
   
   def update(self, game) -> None:
     if self.sword != None and not self.sword.attachedToPlayer:
       self.sword = None
+    if self.activeAbilities['ult'] != False:
+      self.ultCircle.x = self.x + (self.width / 2)
+      self.ultCircle.y = self.y + (self.height / 2)
     super().update(game)
 
   def draw(self) -> None:
@@ -834,13 +844,52 @@ class BarrelMan(Player):
 
   def activateUltAbility(self) -> None:
     super().activateUltAbility(5)
+    prevHeight = self.height
     self.changeSize((72, 72))
     self.bounceMechanic = True
+    self.usesGravity = False
+    if self.direction == 1:
+      self.xDir = self.constSpeed
+    else:
+      self.xDir = -self.constSpeed
+    self.yDir = self.constSpeed
+    self.y -= (self.height / 2) - (prevHeight / 2)
+    print(self.activeAbilities['ult'])
+
+  def duringUltAbility(self) -> None:
+    if self.x < 0:
+      self.xDir = abs(self.xDir)
+      self.x = 0
+    if self.x > WINDOW_SIZE[0] - self.width:
+      self.xDir = -abs(self.xDir)
+      self.x = WINDOW_SIZE[0] - self.width
+    if self.y < 0:
+      self.yDir = abs(self.yDir)
+      self.y = 0
+    if self.y > WINDOW_SIZE[1] - self.height:
+      self.yDir = -abs(self.yDir)
+      self.y = WINDOW_SIZE[1] - self.height
+    for platform in self.game.platforms:
+      collisionInfo = util.rectangleCollision(self.rect, platform.rect)
+      if (collisionInfo[util.COLLIDE_TOP] and self.yDir < 0) or (collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0):
+        self.yDir *= -1
+      if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
+        self.xDir *= -1
+    super().duringUltAbility()
 
   def endUltAbility(self) -> None:
     super().endUltAbility()
     self.bounceMechanic = False
     self.changeSize((32, 32))
+    self.usesGravity = True
+
+  def move(self) -> None:
+    print(self.direction)
+    if self.activeAbilities['ult'] != False:
+      self.x += self.constSpeed * self.direction * 0.015 / deltaT # Change x and y positions based on time between frames and directions
+      self.y += self.yDir * 0.015 / deltaT
+    else:
+      super().move()
 
 
   def resetAbilities(self) -> None:
@@ -990,9 +1039,9 @@ class ErrorPlayer(Player):
     if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource: # If a platform player is glitching passes its allowed glitch time, make sure the player knows as well
       self.currGlitchedPlatform = None
 
-  def move(self, deltaT) -> None:
+  def move(self) -> None:
     if not self.sideGlitch: # move as normal
-      super().move(deltaT)
+      super().move()
     else:
       dist = 0.5 / deltaT # If side glitching, move the player towards the side
       self.x += dist * self.direction
@@ -1283,9 +1332,9 @@ class GlitchBomb(Obstacle):
   
   def detectCollision(self) -> None:
     if self.explosion.isExploding: # Make sure the explosion circle exists
-      for player in self.detectHitObjects: # Hit a player if they hit the explosion
-        if self.explosion.hitGameObject(player):
-          player.incapacitate(1.5)
+      for gameObject in self.detectHitObjects: # Hit a player if they hit the explosion
+        if isinstance(gameObject, Player) and self.explosion.hitGameObject(gameObject):
+          gameObject.incapacitate(1.5)
 
   
 
