@@ -131,8 +131,9 @@ class TransparentRectangle:
     # Set text
     self.text = text
 
-    # Set t4ext to center rectangle
-    self.setText(self.text.text)
+    # Set text to center rectangle
+    if self.text != None:
+      self.setText(self.text.text)
 
   def draw(self) -> None:
     WINDOW.blit(self.surface, (self.x, self.y)) # Put surface on window
@@ -163,6 +164,37 @@ class Text:
       renderer = self.font.render(self.text, True, self.textColor, self.bgColor) 
     if self.show: # If the text should be shown
       WINDOW.blit(renderer, (self.x, self.y)) # Draw text at coords
+
+
+# ================================================================
+# ================================================================
+#
+#  END SCREEN
+#
+# ================================================================
+# ================================================================
+
+class EndScreen:
+
+  def __init__(self, playerInformation):
+    self.playerInfo = playerInformation # Set player information
+    self.boxes = []
+    self.playerModels = []
+    self.leftCoord = []
+    self.boxSize = (150, 450)
+    self.playerModelSize = (128, 128)
+    for i in range(len(self.playerInfo)):
+      print(self.playerInfo[i], self.playerInfo[i].kos, self.playerInfo[i].dealtKos, self.playerInfo[i].damageDealt, self.playerInfo[i].damageReceived, self.playerInfo[i].healingReceived)
+      self.leftCoord.append((WINDOW_SIZE[0] / 2) - ((self.boxSize[0] / 2) * (len(self.playerInfo))) + (self.boxSize[0] * i))
+      self.boxes.append(TransparentRectangle((self.leftCoord[i], (WINDOW_SIZE[1] / 2) - (self.boxSize[1] / 2)), self.boxSize, 210, PLAYER_COLORS[i]))
+      self.playerModels.append(pygame.transform.scale(self.playerInfo[i].image, self.playerModelSize))
+
+  def update(self):
+    for i in range(len(self.boxes)):
+      self.boxes[i].draw()
+      WINDOW.blit(self.playerModels[i], (self.leftCoord[i] + ((self.boxSize[0] - self.playerModelSize[0]) / 2), 100))
+
+
 
 
 # ================================================================
@@ -199,6 +231,7 @@ class Game:
     else:
       self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
 
+    self.allPlayers = self.players.copy()
     self.obstacles = [] # Create list of obstacles
  
     self.percentageXSpacingDiff = (WINDOW_SIZE[0] - 200) / (len(self.players) - 1) # Set spacing between percentage box
@@ -224,6 +257,7 @@ class Game:
       platform.update(self)
 
     # Player attack box collisions
+    removablePlayers = []
     for player in self.players:
       for hitPlayer in self.players:
         if player.attackBox != None:
@@ -233,6 +267,13 @@ class Game:
             for obstacle in self.obstacles:
               if player.attackBox.colliderect(obstacle.rect) and obstacle.punchable:
                 obstacle.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
+      if player.stocks <= 0:
+        removablePlayers.append(player)
+    for player in removablePlayers:
+      self.players.remove(player)
+    if len(self.players) == 1:
+      global currMenu
+      currMenu = EndScreen(self.allPlayers)
     
     removableObstacles = [] # List of obstacles to remove (obstacles cannot be removed from the list when in the middle of looping through that list)
     for obstacle in self.obstacles: # Update the obstacle
@@ -394,9 +435,9 @@ class Platform(GameObject):
       for player in game.players:
         if player.onTopOfPlatform == self: # Do a certain effect depending on which players are on top of the platform
           if self.glitchedPlatformSource == player: # Player is the glitched platform source: subtract from their percentage
-            player.setPercentage(player.percentage - (deltaT * 0.5))
+            player.setPercentage(self.glitchedPlatformSource, player.percentage - (deltaT * 0.5))
           else: # Other players: add to their percentage
-            player.setPercentage(player.percentage + (deltaT))
+            player.setPercentage(self.glitchedPlatformSource, player.percentage + (deltaT))
       if time.time() - self.glitchedTimer[0] > self.glitchedTimer[1]: # Unglitch the platform once time runs out
         self.glitchedPlatformSource = None
 
@@ -455,7 +496,7 @@ class Player(GameObject):
     self.punchControl = False
 
     # Attacking
-    self.attackBox = None # Finish tomorrow
+    self.attackBox = None
     self.percentage = 0
     self.punchable = True
 
@@ -472,6 +513,12 @@ class Player(GameObject):
     self.stocks = 3
     self.spawnCoords = coords
     self.hasUlt = False
+    self.kos = 0
+    self.dealtKos = 0
+    self.damageDealt = 0
+    self.damageReceived = 0
+    self.healingReceived = 0
+    self.recentlyAttackedBy = None
 
     # Ult glow image
     self.ultGlowImage = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/ult_glow.png'), (64, 64))
@@ -493,28 +540,27 @@ class Player(GameObject):
 
   def draw(self, image = None) -> None:
     if image == None:
-      pygame.draw.rect(WINDOW, (127, 127, 127), self.rect) # Draw a rectangle, showing the hitbox of the player (DEBUG FEATURE)
-    else:
-      # Draw the ult glow if they have ult
-      if self.hasUlt:
-        WINDOW.blit(self.ultGlowImage, (self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2)))
+      image = self.image
+    # Draw the ult glow if they have ult
+    if self.hasUlt:
+      WINDOW.blit(self.ultGlowImage, (self.x + (self.width / 2) - (self.ultGlowImage.get_width() / 2), self.y + (self.height / 2) - (self.ultGlowImage.get_height() / 2)))
 
-      flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
-      WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y)) # Put image on screen
+    flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
+    WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y)) # Put image on screen
 
-      # If the charactes is outside the shown screen:
-      if self.x < -30 or self.x > WINDOW_SIZE[0] + 30 - self.width:
-        maxHeight = WINDOW_SIZE[1] - 5 - self.height # Get maximum height the pointer can go up to
-        pointerRotation = 0 # Set pointer rotation (this is in degrees, not radians, because pygame takes in degrees)
-        if self.x < -30: # Rotate the pointer if the player is too much to the left of the screen (so it points left)
-          pointerRotation = 180
-          imageCoords = (5, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Place the image to the left of the screen and at a y-position correlating to the actual y-position unless the character is too high or low on the screen
-        else:
-          imageCoords = (WINDOW_SIZE[0] - 5 - self.width, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Same thing but pointer is on the right
-        WINDOW.blit(pygame.transform.rotate(self.pointerImg, pointerRotation), imageCoords) # Blit the image at the coords provided above
-        WINDOW.blit(pygame.transform.flip(pygame.transform.scale(image, (14, 14)), flipHorizontally, False), (imageCoords[0] + 9, imageCoords[1] + 9)) # Place the character image in the middle
-      if self.shieldActive: # Draw shield if shield is active
-        WINDOW.blit(self.shieldImg, (self.x - 12, self.y - 12))
+    # If the charactes is outside the shown screen:
+    if self.x < -30 or self.x > WINDOW_SIZE[0] + 30 - self.width:
+      maxHeight = WINDOW_SIZE[1] - 5 - self.height # Get maximum height the pointer can go up to
+      pointerRotation = 0 # Set pointer rotation (this is in degrees, not radians, because pygame takes in degrees)
+      if self.x < -30: # Rotate the pointer if the player is too much to the left of the screen (so it points left)
+        pointerRotation = 180
+        imageCoords = (5, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Place the image to the left of the screen and at a y-position correlating to the actual y-position unless the character is too high or low on the screen
+      else:
+        imageCoords = (WINDOW_SIZE[0] - 5 - self.width, min(maxHeight, max(5, self.y - ((self.pointerImg.get_height() - self.height) / 2)))) # Same thing but pointer is on the right
+      WINDOW.blit(pygame.transform.rotate(self.pointerImg, pointerRotation), imageCoords) # Blit the image at the coords provided above
+      WINDOW.blit(pygame.transform.flip(pygame.transform.scale(image, (14, 14)), flipHorizontally, False), (imageCoords[0] + 9, imageCoords[1] + 9)) # Place the character image in the middle
+    if self.shieldActive: # Draw shield if shield is active
+      WINDOW.blit(self.shieldImg, (self.x - 12, self.y - 12))
 
   def drawHoverText(self):
     # Draw hover text
@@ -639,8 +685,8 @@ class Player(GameObject):
           self.activeAbilities['second'] = True
       if self.punchControl:
         self.punch()
-    else:
-      self.attackBox = None
+      else:
+        self.attackBox = None
     
     if self.shieldControl and self.xDir == 0 and self.yDir == 0 and time.time() - self.shieldStartTimer < 2 and not self.shieldButtonPressed: # If shield is pressed, player is not moving, and shield cooldown timer has passed
       self.shieldActive = True # Activate shield
@@ -666,8 +712,12 @@ class Player(GameObject):
     self.x, self.y = self.spawnCoords # Reset their position
     self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
     self.stocks -= 1 # Remove one from their stocks
-    self.setPercentage(0)
+    self.kos += 1
+    if self.recentlyAttackedBy != None:
+      self.recentlyAttackedBy.dealtKos += 1
+    self.setPercentage(None, 0)
     self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
+    #self.recentlyAttackedBy = None
     self.resetAbilities() # Reset abilties
 
   def changeSize(self, newDimensions) -> None:
@@ -678,11 +728,21 @@ class Player(GameObject):
     self.rect.width = self.width # Set rectangle sizes
     self.rect.height = self.height
 
-  def setPercentage(self, percentage):
+  def setPercentage(self, source, percentage):
+    oldPercentage = self.percentage
     self.percentage = percentage # Set their percentages to be equal to 0
     if self.percentage < 0:
       self.percentage = 0
     self.game.statDisplay[self][0].setText(f'{round(self.percentage, 1)}%')
+    self.recentlyAttackedBy = source
+    print(self.recentlyAttackedBy)
+
+    # update percentage stats
+    if source != None:
+      if self.percentage > oldPercentage:
+        self.damageReceived += (self.percentage - oldPercentage)
+      elif self.percentage < oldPercentage:
+        self.healingReceived += (oldPercentage - self.percentage)
     
 
   # FIRST ABILITY:
@@ -752,7 +812,7 @@ class Player(GameObject):
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     if not self.shieldActive: # If player shield is down
       super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
-      self.setPercentage(self.percentage + damage)
+      self.setPercentage(source, self.percentage + damage)
 
 
 
@@ -763,9 +823,7 @@ class BarrelMan(Player):
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.image = pygame.transform.scale(pygame.image.load(
-      'assets/images/characters/barrel_man/barrel_man.png'
-    ), (self.width, self.height)) # Load normal image
+    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/barrel_man/barrel_man.png'), (self.width, self.height))
     self.rollImage = pygame.transform.scale(pygame.image.load(
       'assets/images/characters/barrel_man/barrel_man_roll.png'
     ), (self.width, self.height)) # Load rolling image
@@ -801,7 +859,7 @@ class BarrelMan(Player):
     elif self.activeAbilities['ult'] != False:
       super().draw(self.ultImage)
     else: # Draw rolling image if an ability requiring Barrel Man to roll is used
-      super().draw(self.image)
+      super().draw()
 
   def activateFirstAbility(self) -> bool:
     if self.xDir != 0: # If there is movement on the x-plane
@@ -919,7 +977,7 @@ class Pog(Player):
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height)) # Load normal image
+    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height))
     self.weight = 5 # Set base stats
     self.jumpingPower = 25
     self.totalAirJumps = 4
@@ -944,8 +1002,6 @@ class Pog(Player):
     self.timeAtSizeChange = 0
     self.currSizeIndex = 0
 
-    self.hasUlt = True
-
   def update(self, game) -> None:
     super().update(game)
     if self.isBig: # If player is big
@@ -959,9 +1015,6 @@ class Pog(Player):
             self.hitObjects.remove(gameObject)
     if not self.inAir:
       self.releasedBomb = False
-
-  def draw(self) -> None:
-    super().draw(self.image) # Draw Pog
 
   def activateFirstAbility(self) -> bool:
     if not self.isBig: # If the player is not big
@@ -1068,7 +1121,7 @@ class ErrorPlayer(Player):
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.mainImage = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
+    self.image = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
     self.glitchedImage = ChangingSprite(pygame.image.load('assets/images/characters/error/green_code.png'), (0, 0), (24, 24), 0.2)
     self.currGlitchedPlatform = None
     self.glitchedMode = False
@@ -1121,7 +1174,7 @@ class ErrorPlayer(Player):
       self.glitchedImage.y = self.y
       self.glitchedImage.update()
     else:
-      super().draw(self.mainImage)
+      super().draw()
 
   def activateDownwardsAbility(self) -> bool:
     if not self.sideGlitch: # Use down ability if side ability is off
