@@ -178,21 +178,45 @@ class EndScreen:
 
   def __init__(self, playerInformation):
     self.playerInfo = playerInformation # Set player information
-    self.boxes = []
-    self.playerModels = []
-    self.leftCoord = []
-    self.boxSize = (150, 450)
+    self.boxes = [] # Create background boxes
+    self.playerModels = [] # Get image of player
+    self.leftCoord = [] # Box left coordinates
+    self.statText = [] # Create text boxes 
+    self.boxSize = (150, 450) # Set player box size
     self.playerModelSize = (128, 128)
     for i in range(len(self.playerInfo)):
-      print(self.playerInfo[i], self.playerInfo[i].kos, self.playerInfo[i].dealtKos, self.playerInfo[i].damageDealt, self.playerInfo[i].damageReceived, self.playerInfo[i].healingReceived)
+      self.statText.append([])
       self.leftCoord.append((WINDOW_SIZE[0] / 2) - ((self.boxSize[0] / 2) * (len(self.playerInfo))) + (self.boxSize[0] * i))
       self.boxes.append(TransparentRectangle((self.leftCoord[i], (WINDOW_SIZE[1] / 2) - (self.boxSize[1] / 2)), self.boxSize, 210, PLAYER_COLORS[i]))
       self.playerModels.append(pygame.transform.scale(self.playerInfo[i].image, self.playerModelSize))
 
+      # Create stat text
+      self.statText[i].append(Text(TEXT_FONT_SMALL, f"KO's: {self.playerInfo[i].dealtKos}", (self.leftCoord[i] + 4, 250)))
+      self.statText[i].append(Text(TEXT_FONT_SMALL, f"Death's: {self.playerInfo[i].kos}", (self.leftCoord[i] + 4, 275)))
+      self.statText[i].append(Text(TEXT_FONT_SMALL, f"Dealt damage: {round(self.playerInfo[i].damageDealt, 1)}", (self.leftCoord[i] + 4, 300)))
+      self.statText[i].append(Text(TEXT_FONT_SMALL, f"Damage received: {round(self.playerInfo[i].damageReceived, 1)}", (self.leftCoord[i] + 4, 325)))
+      self.statText[i].append(Text(TEXT_FONT_SMALL, f"Healing received: {round(self.playerInfo[i].healingReceived, 1)}", (self.leftCoord[i] + 4, 350)))
+
+    # Create title text
+    self.titleText = Text(TEXT_FONT, 'GAME OVER', (0, 15))
+    self.titleText.x = (WINDOW_SIZE[0] / 2) - (self.titleText.font.size(self.titleText.text)[0] / 2)
+
+    # Create continue text
+    self.continueText = Text(TEXT_FONT, 'PRESS SPACE TO CONTINUE', (0, WINDOW_SIZE[1] - 65))
+    self.continueText.x = (WINDOW_SIZE[0] / 2) - (self.continueText.font.size(self.continueText.text)[0] / 2)
+
   def update(self):
     for i in range(len(self.boxes)):
-      self.boxes[i].draw()
-      WINDOW.blit(self.playerModels[i], (self.leftCoord[i] + ((self.boxSize[0] - self.playerModelSize[0]) / 2), 100))
+      self.boxes[i].draw() # Draw each box
+      WINDOW.blit(self.playerModels[i], (self.leftCoord[i] + ((self.boxSize[0] - self.playerModelSize[0]) / 2), 100)) # Draw the player models
+      for j in range(len(self.statText[i])): # Draw the stat text
+        self.statText[i][j].update()
+    self.titleText.update() # Draw the header/footer text
+    self.continueText.update()
+
+    if spaceTapped:
+      global currMenu
+      currMenu = MainMenu()
 
 
 
@@ -397,8 +421,8 @@ class GameObject:
       elif angle > math.pi * (3 / 4):
         angle = math.pi * (3 / 4)
       mult = -1 # Set y direction multiplier
-    self.xDir = (math.cos(angle) * knockbackMultiplyer * 20) / self.weight # Set new x and y directions
-    self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 20) / self.weight
+    self.xDir = (math.cos(angle) * knockbackMultiplyer * 10) / self.weight # Set new x and y directions
+    self.yDir = mult * (math.sin(angle) * knockbackMultiplyer * 10) / self.weight
 
   def isOutOfBounds(self) -> bool:
     return self.x < -1500 or self.x > WINDOW_SIZE[0] + 1500 or self.y < -2000 or self.y > WINDOW_SIZE[1] + 1000
@@ -435,9 +459,9 @@ class Platform(GameObject):
       for player in game.players:
         if player.onTopOfPlatform == self: # Do a certain effect depending on which players are on top of the platform
           if self.glitchedPlatformSource == player: # Player is the glitched platform source: subtract from their percentage
-            player.setPercentage(self.glitchedPlatformSource, player.percentage - (deltaT * 0.5))
+            player.setPercentage(self.glitchedPlatformSource, player.percentage - (deltaT * 2.5))
           else: # Other players: add to their percentage
-            player.setPercentage(self.glitchedPlatformSource, player.percentage + (deltaT))
+            player.setPercentage(self.glitchedPlatformSource, player.percentage + (deltaT * 6))
       if time.time() - self.glitchedTimer[0] > self.glitchedTimer[1]: # Unglitch the platform once time runs out
         self.glitchedPlatformSource = None
 
@@ -455,7 +479,7 @@ class Player(GameObject):
   secondAbilityIsHeld = False
   downwardsAbilityIsHeld = False
 
-  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+  def __init__(self, game, imgDir, coords, playerSide, hoverText, hoverTextColor):
     self.game = game
     self.hoverText = Text(TEXT_FONT_SMALL, hoverText)
     self.hoverText.textColor = hoverTextColor
@@ -525,6 +549,10 @@ class Player(GameObject):
 
     # Platform info
     self.onTopOfPlatform = None
+
+    # Image
+    self.imageDir = imgDir
+    self.image = pygame.transform.scale(pygame.image.load(self.imageDir), (self.width, self.height))
 
 
 
@@ -735,14 +763,15 @@ class Player(GameObject):
       self.percentage = 0
     self.game.statDisplay[self][0].setText(f'{round(self.percentage, 1)}%')
     self.recentlyAttackedBy = source
-    print(self.recentlyAttackedBy)
 
     # update percentage stats
-    if source != None:
-      if self.percentage > oldPercentage:
-        self.damageReceived += (self.percentage - oldPercentage)
-      elif self.percentage < oldPercentage:
-        self.healingReceived += (oldPercentage - self.percentage)
+    if self.percentage > oldPercentage:
+      percentDiff = self.percentage - oldPercentage
+      self.damageReceived += percentDiff
+      if source != None:
+        source.damageDealt += percentDiff
+    elif self.percentage < oldPercentage and source != None:
+      self.healingReceived += oldPercentage - self.percentage
     
 
   # FIRST ABILITY:
@@ -811,7 +840,7 @@ class Player(GameObject):
 
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
     if not self.shieldActive: # If player shield is down
-      super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
+      super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * 2 * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
       self.setPercentage(source, self.percentage + damage)
 
 
@@ -822,8 +851,7 @@ class BarrelMan(Player):
   firstAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
-    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/barrel_man/barrel_man.png'), (self.width, self.height))
+    super().__init__(game, 'assets/images/characters/barrel_man/barrel_man.png', coords, playerSide, hoverText, hoverTextColor)
     self.rollImage = pygame.transform.scale(pygame.image.load(
       'assets/images/characters/barrel_man/barrel_man_roll.png'
     ), (self.width, self.height)) # Load rolling image
@@ -976,8 +1004,7 @@ class Pog(Player):
   firstAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
-    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.image = pygame.transform.scale(pygame.image.load('assets/images/characters/pog/pog.png'), (self.width, self.height))
+    super().__init__(game, 'assets/images/characters/pog/pog.png', coords, playerSide, hoverText, hoverTextColor)
     self.weight = 5 # Set base stats
     self.jumpingPower = 25
     self.totalAirJumps = 4
@@ -1120,8 +1147,7 @@ class Pog(Player):
 class ErrorPlayer(Player):
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
-    super().__init__(game, coords, playerSide, hoverText, hoverTextColor)
-    self.image = pygame.transform.scale(pygame.transform.flip(pygame.image.load('assets/images/characters/error/errorcube.png'), True, False), (self.width, self.height))
+    super().__init__(game, 'assets/images/characters/error/errorcube.png', coords, playerSide, hoverText, hoverTextColor)
     self.glitchedImage = ChangingSprite(pygame.image.load('assets/images/characters/error/green_code.png'), (0, 0), (24, 24), 0.2)
     self.currGlitchedPlatform = None
     self.glitchedMode = False
@@ -1196,7 +1222,7 @@ class ErrorPlayer(Player):
         self.yDir = 0
         self.firstAbilityMovement = False
         if time.time() - self.bombCooldown >= 5: # If the last time this ability is used is greater than 5 seconds, create a glitch bomb
-          newBomb = GlitchBomb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)))
+          newBomb = GlitchBomb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self)
           self.activeBomb = newBomb
           self.game.obstacles.append(newBomb)
           self.bombCooldown = time.time()
@@ -1230,12 +1256,9 @@ class Obstacle(GameObject):
     self.timer = timer
     self.detectHitObjects = []
     self.currentlyHitObjects = []
-    for player in game.players: # Loop through player list, add all players except immune player to detectable players
-      if player != self.immunePlayer:
-        self.detectHitObjects.append(player)
-    for obstacle in game.obstacles:
-      if obstacle.punchable:
-        self.detectHitObjects.append(obstacle)
+    for gameObject in game.players + game.obstacles: # Loop through player list, add all players except immune player to detectable players
+      if gameObject != self.immunePlayer and gameObject.punchable:
+        self.detectHitObjects.append(gameObject)
     self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
     
 
@@ -1419,8 +1442,8 @@ class PogBomb(Obstacle):
 
 class GlitchBomb(Obstacle):
 
-  def __init__(self, game, coords):
-    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/characters/error/missing_textures_pb.png'), (20, 20)))
+  def __init__(self, game, coords, shotBy):
+    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/objects/missing_textures_pb.png'), (20, 20)), shotBy)
     self.usesGravity = True
     self.explosion = util.CircularExplosion(150, AnimatedSprite(pygame.image.load('assets/images/explosions/glitch_explosion.png'), (self.x, self.y), 0.05, 500))
     self.punchable = True
