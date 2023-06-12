@@ -369,6 +369,9 @@ class GameObject:
     # Set attack stats
     self.punchable = False
 
+    # Platform stats
+    self.onTopOfPlatform = None
+
   def update(self, game) -> None:
     self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
     if self.usesGravity: # if object uses gravity, apply gravity and, if this isn't a platform, detect if it hits a platform
@@ -390,10 +393,11 @@ class GameObject:
   
   def collideWithPlatforms(self, game) -> None:
     self.inAir = True
+    self.onTopOfPlatform = None
     for platform in game.platforms:
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get all the collision info for platform collision
       if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0: # If the object is falling and hits the top of a platform (bottom of object hits platform)
-        self.hitPlatformFromBottom(platform) # Run code to hit platform
+        self.onLandOnPlatform(platform) # Run code to hit platform
       if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0: # If the object is going upwards and htis the bottom of a platform
         self.y -= self.yDir # Stop upwards movement
         self.yDir = 0
@@ -403,7 +407,8 @@ class GameObject:
   def gravity(self) -> None:
     self.yDir += 0.2 # Add 2 to the vertical movement of the character going down
 
-  def hitPlatformFromBottom(self, platform) -> None: # Code used to hit platform from the bottom
+  def onLandOnPlatform(self, platform) -> None: # Code used to hit platform from the bottom
+    self.onTopOfPlatform = platform
     self.y = platform.rect.top - self.height # Set y position so bottom of object is touching the platform
     self.xDir = 0
     if self.yDir > 20: # Bounce object 
@@ -610,6 +615,7 @@ class Player(GameObject):
         self.secondAbilityControlHeld = mTapped
         self.shieldControl = hPressed
         self.punchControl = bTapped
+        self.punchBtnPressed = bPressed
         self.ultControl = nTapped and self.xDir == 0
       elif self.playerSide == 'right':
         self.leftControl = leftPressed
@@ -623,6 +629,7 @@ class Player(GameObject):
         self.secondAbilityControlHeld = num3Pressed
         self.shieldControl = num5Pressed
         self.punchControl = num1Tapped
+        self.punchBtnPressed = num1Pressed
         self.ultControl = num2Tapped and self.xDir == 0
     else:
       self.leftControl = False
@@ -636,20 +643,8 @@ class Player(GameObject):
       self.secondAbilityControlHeld = False
       self.shieldControl = False
       self.punchControl = False
+      self.punchBtnPressed = False
       self.ultControl = False
-
-  def collideWithPlatforms(self, game) -> None:
-    self.inAir = True # Automatically set the player to be in the air
-    self.onTopOfPlatform = None
-    for platform in game.platforms: # Loop through platforms
-      collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get collision info for object
-      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir >= 0: # If bottom of player hits platform, run hitting ground function
-        self.onLandOnPlatform(platform)
-      if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0:
-        self.y -= self.yDir
-        self.yDir = 0
-      if (collisionInfo[util.COLLIDE_LEFT] and self.xDir < 0) or (collisionInfo[util.COLLIDE_RIGHT] and self.xDir > 0):
-        self.x -= self.xDir
 
   def onLandOnPlatform(self, platform):
     self.y = platform.rect.top - self.height
@@ -1162,6 +1157,13 @@ class ErrorPlayer(Player):
     self.bombCooldown = 0
     self.firstAbilityMovement = True
 
+    # SECOND ABILITY
+    self.activeEnergyCubes = []
+
+    # ULT ABILITY
+    self.ultEnergyBallShootTimer = 0
+    self.ultGlitchBomb = None
+
   def update(self, game) -> None:
     super().update(game)
     if (self.downGlitch and (not self.inAir or self.yDir <= 0)) or (self.sideGlitch and self.remainingDist <= 0): # If player's abilities do not require player to be in glitched mode, turn it off and reset any limitations
@@ -1177,6 +1179,13 @@ class ErrorPlayer(Player):
     if self.currGlitchedPlatform != None and not self.currGlitchedPlatform.glitchedPlatformSource: # If a platform player is glitching passes its allowed glitch time, make sure the player knows as well
       self.currGlitchedPlatform = None
 
+    removableCubes = []
+    for energyCube in self.activeEnergyCubes:
+      if energyCube.mustBeRemoved:
+        removableCubes.append(energyCube)
+    for energyCube in removableCubes:
+      self.activeEnergyCubes.remove(energyCube)
+
   def move(self) -> None:
     if not self.sideGlitch: # move as normal
       super().move()
@@ -1189,9 +1198,9 @@ class ErrorPlayer(Player):
     if self.glitchedMode and self.currGlitchedPlatform == None: # If the player is using their down ability and don't already have a glitched latform
       self.currGlitchedPlatform = platform # Glitch platform and record it
       platform.glitch(self, 5)
-      for player in self.game.players: # Launch all enemy players
-        if player.onTopOfPlatform == platform:
-          player.onNormalAttack(self, (player.x + (player.width / 2), player.y + (self.width * (3 / 2))), 12, 1.7, True)
+      for gameObject in self.game.players + self.game.obstacles: # Launch all enemy players
+        if gameObject.onTopOfPlatform == platform:
+          gameObject.onNormalAttack(self, (gameObject.x + (gameObject.width / 2), gameObject.y + (self.width * (3 / 2))), 12, 1.7, True)
     super().onLandOnPlatform(platform)
 
   def draw(self) -> None:
@@ -1230,6 +1239,49 @@ class ErrorPlayer(Player):
         self.activeBomb.detonate() # Detonate the bomb
         self.activeBomb = None
     return super().activateFirstAbility()
+  
+  def activateSecondAbility(self) -> bool:
+    if self.punchBtnPressed: # If the punch button is held down when this ability goes off, detonate all of the available energy cubes
+      for energyCube in self.activeEnergyCubes:
+        energyCube.activate()
+    else:
+      if len(self.activeEnergyCubes) < 3: # If there are less than three energy cubes
+        energyBomb = EnergyCube(self.game, (self.x, self.y), self, (4.5 if self.direction == 1 else -4.5, -4.5)) # Shoot an energy cube, going 45 degrees up from the horizontal plane
+        self.game.obstacles.append(energyBomb) # Add to obstacles list as well as this player's energy cube tracker list
+        self.activeEnergyCubes.append(energyBomb)
+    return super().activateSecondAbility()
+  
+  def activateUltAbility(self) -> None:
+    super().activateUltAbility(3) # Activate for three seconds
+    for platform in self.game.platforms: # Loop through platforms
+      platform.glitch(self, 14) # Glitch them for 14 seconds
+      for gameObject in self.game.players + self.game.obstacles: # Punch/attack all punchable objects and players if they are all punchable
+        if gameObject.onTopOfPlatform == platform and gameObject.punchable:
+          gameObject.onNormalAttack(self, (gameObject.x + (gameObject.width / 2), gameObject.y + (self.width * (3 / 2))), 23, 0.8, True)
+    self.ultGlitchBomb = GlitchBomb(self.game, (self.x, self.y), self, 3) # Create an instant detonating glitch bomb on top of the player
+    self.ultGlitchBomb.detonate()
+    self.ultEnergyBallShootTimer = time.time() # Set energy ball timer
+
+  def duringUltAbility(self) -> None:
+    super().duringUltAbility()
+    if self.ultGlitchBomb != None: # Update the glitch bomb explosion, if it exists
+      self.ultGlitchBomb.update(self.game)
+      if self.ultGlitchBomb.explosion.atEnd: # If the explosion is at the end, remove it
+        self.ultGlitchBomb = None
+    if time.time() - self.ultEnergyBallShootTimer >= 0.5: # If the energy ball timer has passed 0.5 seconds
+      closestPlayer = None # Closest player variable
+      closestDistance = -1 # CLosest player distance variable
+      for player in self.game.players: # Get the closest player, other than this player itself, by looping through players
+        if player != self:
+          distance = math.sqrt(((self.x - player.x) ** 2) + ((self.y - player.y) ** 2)) # Get distance between players
+          if closestDistance == -1 or distance < closestDistance: # Set distance and closest player if none has been set or a closer player has been found
+            closestPlayer = player
+            closestDistance = distance
+      self.game.obstacles.append(EnergyOrb(self.game, (self.x, self.y), (closestPlayer.x, closestPlayer.y), self)) # Create an energy orb, shoot it towards the closest player
+      self.ultEnergyBallShootTimer = time.time() # Reset timer
+
+  def endUltAbility(self) -> None:
+    super().endUltAbility()
   
   def collideWithPlatforms(self, game) -> None: # If the side glitch effect isn't active, collide with platforms as normal
     if not self.sideGlitch:
@@ -1366,7 +1418,7 @@ class Dagger(Obstacle):
   def draw(self) -> None:
     WINDOW.blit(pygame.transform.rotate(self.img, self.angle), (self.x, self.y))
 
-  def hitPlatformFromBottom(self, platform) -> None:
+  def onLandOnPlatform(self, platform) -> None:
     self.y = platform.rect.top - self.height
     self.y -= self.yDir
     self.inAir = False
@@ -1442,11 +1494,12 @@ class PogBomb(Obstacle):
 
 class GlitchBomb(Obstacle):
 
-  def __init__(self, game, coords, shotBy):
+  def __init__(self, game, coords, shotBy, incapacitationTime = 1.5):
     super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/objects/missing_textures_pb.png'), (20, 20)), shotBy)
     self.usesGravity = True
     self.explosion = util.CircularExplosion(150, AnimatedSprite(pygame.image.load('assets/images/explosions/glitch_explosion.png'), (self.x, self.y), 0.05, 500))
     self.punchable = True
+    self.incapacitationTime = incapacitationTime
 
   def draw(self) -> None:
     if self.explosion.isExploding:
@@ -1469,7 +1522,50 @@ class GlitchBomb(Obstacle):
     if self.explosion.isExploding: # Make sure the explosion circle exists
       for gameObject in self.detectHitObjects: # Hit a player if they hit the explosion
         if isinstance(gameObject, Player) and self.explosion.hitGameObject(gameObject):
-          gameObject.incapacitate(1.5)
+          gameObject.incapacitate(self.incapacitationTime)
+
+class EnergyCube(Obstacle):
+
+  def __init__(self, game, coords, shotBy, direction):
+    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/objects/missing_textures_rg.png'), (20, 20)))
+    self.xDir, self.yDir = direction # set x and y movement
+    self.shotByPlayer = shotBy
+    self.usesGravity = True
+    self.punchable = True
+
+  def activate(self): # If the player activates all the cubes
+    self.mustBeRemoved = True # Remove from game
+    self.game.obstacles.append(EnergyOrb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), (self.shotByPlayer.x + (self.shotByPlayer.width / 2), self.shotByPlayer.y + (self.shotByPlayer.height / 2)), self.shotByPlayer)) # Create an energy orb, shoot it towards the activating player
+
+class EnergyOrb(Obstacle):
+
+  def __init__(self, game, startingCoords, targetCoords, shotBy):
+    super().__init__(game, startingCoords, pygame.image.load('assets/images/objects/energy_orb.png'), shotBy)
+    self.shotBy = shotBy
+    self.targetCoords = targetCoords # Get target coords
+    angle = math.atan2(self.targetCoords[1] - self.y, self.targetCoords[0] - self.x) # Get angle in which the ball must shoot
+    self.xDir = 15 * math.cos(angle) # Set x and y movements to match the angle
+    self.yDir = 15 * math.sin(angle)
+    self.collisionCircle = util.Circle((self.x, self.y), self.width / 2) # Create a collision circle
+    self.timer = time.time() # Set timer
+
+  def update(self, game) -> None:
+    super().update(game)
+    self.collisionCircle.x = self.x + (self.width / 2) # Set colliding circle x and y
+    self.collisionCircle.y = self.y + (self.height / 2)
+    if time.time() - self.timer >= 2.5: # Remove this orb if it has existed for more than 2.5 seconds
+      self.mustBeRemoved = True
+
+  def detectCollision(self) -> None:
+    for gameObject in self.detectHitObjects: # Loop through applicable game objects
+      if util.rectangleCircleCollision(gameObject.rect, self.collisionCircle) and not gameObject in self.currentlyHitObjects: # If the circle and rectangle collide
+        self.onCollision(gameObject) # Hit game object, make sure they are not hit twice before they collide
+        self.currentlyHitObjects.append(gameObject)
+      elif not self.rect.colliderect(gameObject.rect) and gameObject in self.currentlyHitObjects:
+        self.currentlyHitObjects.remove(gameObject)
+
+  def onCollision(self, gameObject):
+    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 12, 0.9) # Punch the game object
 
   
 
