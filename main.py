@@ -37,7 +37,7 @@ class MainMenu:
     self.currentIndex = 0
 
     self.mapSetup = [
-      [ # MAP 1: Flat
+      [ # MAP 1: flat
         Platform((-50, 450), (900, 600))
       ],
       [ # MAP 2: elevation
@@ -412,7 +412,8 @@ class GameObject:
     self.y += self.yDir * 0.015 / deltaT
 
   def draw(self) -> None:
-    WINDOW.blit(self.img, (self.x, self.y)) # Draw the image
+    if self.img != None:
+      WINDOW.blit(self.img, (self.x, self.y)) # Draw the image
   
   def collideWithPlatforms(self, game) -> None:
     self.inAir = True
@@ -1371,8 +1372,11 @@ class Kelvhan(Player):
       self.flameLevel += 1
       if self.flameLevel > 3:
         self.flameLevel = 1
-    else:
-      pass
+    elif self.spellLevel >= self.flameLevel * 2:
+      self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, 0))
+      self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, math.pi / 12))
+      self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, -math.pi / 12))
+      self.spellLevel -= self.flameLevel * 2
     return super().activateFirstAbility()
 
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
@@ -1662,6 +1666,69 @@ class EnergyOrb(Obstacle):
   def onCollision(self, gameObject):
     gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 12, 0.9) # Punch the game object
 
+class Fire(Obstacle):
+
+  def __init__(self, game, coords, dimensions, img, immunePlayer=None, timer=5):
+    super().__init__(game, (coords[0] - (dimensions[0] / 2), coords[1] - (dimensions[1] / 2)), None, immunePlayer, timer)
+    self.width, self.height = dimensions
+
+    # Create animated sprites
+    self.redFire = AnimatedSprite('assets/images/objects/fire/red.png', (0, 0), 0.1, 100)
+    self.orangeRedFire = AnimatedSprite('assets/images/objects/fire/orange-red.png', (0, 0), 0.1, 100)
+    self.orangeFire = AnimatedSprite('assets/images/objects/fire/orange.png', (0, 0), 0.1, 100)
+    self.orangeYellowFire = AnimatedSprite('assets/images/objects/fire/orange-yellow.png', (0, 0), 0.1, 100)
+    self.yellowFire = AnimatedSprite('assets/images/objects/fire/yellow.png', (0, 0), 0.1, 100)
+    self.newFireList = [self.redFire, self.orangeRedFire, self.orangeFire, self.orangeYellowFire, self.yellowFire]
+
+    self.fireTimer = 0
+
+    self.fireList = []
+
+  def update(self, game) -> None:
+    super().update(game)
+    self.fireTimer == deltaT
+    if self.fireTimer >= 0.05:
+      newFire = self.newFireList[random.randint(0, 4)].copy()
+      self.fireList.append(newFire.scale(random.randint(5, 15)))
+
+    removableFire = []
+    for fire in self.fireList:
+      fire.update()
+      if fire.frame == fire.lastFrame:
+        removableFire.append(fire)
+    for fire in removableFire:
+      self.fireList.remove(fire)
+
+
+class ScorchingRay(Obstacle):
+
+  def __init__(self, game, coords, level, shotBy, angleFromHori):
+    image = pygame.transform.flip(pygame.transform.rotate(pygame.image.load(f'assets/images/objects/scorching_ray/level{level}.png'), angleFromHori * (180 / math.pi)), shotBy.direction == 1, False)
+    if level == 2: # Set damage and knockback based on level of scorching ray
+      self.damage = 6
+      self.knockbackModifyer = 0
+    elif level == 4:
+      self.damage = 12
+      self.knockbackModifyer = 0.8
+    elif level == 6:
+      self.damage = 23
+      self.knockbackModifyer = 1.4
+    super().__init__(game, coords, pygame.transform.scale(image, (50, 8)), shotBy, 10)
+    self.shotBy = shotBy
+    self.usesGravity = False
+    self.xDir = 28 * self.shotBy.direction * math.cos(angleFromHori)
+    self.yDir = 28 * math.sin(angleFromHori)
+
+  def onCollision(self, gameObject):
+    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), self.damage, self.knockbackModifyer)
+    self.mustBeRemoved = True
+
+  def update(self, game) -> None:
+    super().update(game)
+    for platform in game.platforms:
+      if self.rect.colliderect(platform.rect): # If ray hits a platform
+        self.mustBeRemoved = True
+
   
 
 
@@ -1698,6 +1765,9 @@ class AnimatedSprite:
     self.width, self.height = scaling # Scale the image
     self.frameHeight = self.height
     self.imgFull = pygame.transform.scale(self.imgFull, (self.width, self.height * (self.lastFrame + 1)))
+
+  def copy(self):
+    return AnimatedSprite(self.imgFull, (self.x, self.y), self.timePerFrame, self.frameHeight)
 
 # RANDOM CHANGING CLIPPED SPRITE
 
