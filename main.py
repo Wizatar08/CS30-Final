@@ -27,13 +27,35 @@ class MainMenu:
 
   def __init__(self):
     standardMenuWidth = 512
-    self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "START")
+    self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 320), (standardMenuWidth, 65), TEXT_FONT, "START")
     self.menuOptions = [
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERR://23¤Y%/"),
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERR://23¤Y%/"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERR://23¤Y%/", "Player 1: Kelvhan"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERR://23¤Y%/", "Player 2: Kelvhan"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "Map: Flat", "Map: Elevation", "Map: Squared"),
       self.startMenuOption
     ] # Create menu options
     self.currentIndex = 0
+
+    self.mapSetup = [
+      [ # MAP 1: Flat
+        Platform((-50, 450), (900, 600))
+      ],
+      [ # MAP 2: elevation
+        Platform((100, 500), (200, 15)), Platform((500, 500), (200, 15)), Platform((250, 375), (300, 15)),
+        Platform((50, 250), (250, 15)), Platform((500, 250), (250, 15)), Platform((150, 125), (500, 15)),
+      ],
+      [ # MAP 3: squared
+        Platform((110, 150), (80, 80)), Platform((280, 150), (80, 80)), Platform((450, 150), (80, 80)), Platform((620, 150), (80, 80)), 
+        Platform((195, 300), (80, 80)), Platform((535, 300), (80, 80)), 
+        Platform((110, 450), (80, 80)), Platform((280, 450), (80, 80)), Platform((450, 450), (80, 80)), Platform((620, 450), (80, 80))
+      ]
+    ]
+
+    self.spawnCoords = [
+      [(100, 300), (700, 300)], # MAP 1: flat
+      [(100, 100), (700, 100)], # MAP 2: elevation
+      [(130, 290), (650, 290)]  # MAP 3: squared
+    ]
     
 
   def update(self) -> None:
@@ -44,7 +66,7 @@ class MainMenu:
 
     if self.startMenuOption.spaceTapped: # If the start button is pressed
       global currMenu
-      currMenu = Game(self.menuOptions[0].currentIndex, self.menuOptions[1].currentIndex)
+      currMenu = Game(self.menuOptions[0].currentIndex, self.menuOptions[1].currentIndex, self.mapSetup[self.menuOptions[2].currentIndex], self.spawnCoords[self.menuOptions[2].currentIndex])
 
   def detectKey(self) -> None:
     if downTapped: # Loop down menu option if down is pressed
@@ -231,29 +253,30 @@ class EndScreen:
 
 class Game:
 
-  def __init__(self, player1option, player2option):
-    self.platforms = [
-      Platform((100, 500), (200, 15)), Platform((500, 500), (200, 15)), Platform((250, 375), (300, 15)),
-      Platform((50, 250), (250, 15)), Platform((500, 250), (250, 15)), Platform((150, 125), (500, 15)),
-    ] # Create level platforms
+  def __init__(self, player1option, player2option, platformSetup, spawnCoords):
+    self.platforms = platformSetup # Create level platforms
     self.players = [] # Create list of players
     if player1option == 0: # Set player 1 character
-      self.players.append(BarrelMan(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
+      self.players.append(BarrelMan(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
     elif player1option == 1:
-      self.players.append(Pog(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
+      self.players.append(Pog(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
     elif player1option == 2:
-      self.players.append(ErrorPlayer(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
+      self.players.append(ErrorPlayer(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
+    elif player1option == 3:
+      self.players.append(Kelvhan(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
     else:
-      self.players.append(Player(self, (100, 100), 'left', 'P1', PLAYER_COLORS[0]))
+      self.players.append(Player(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
 
     if player2option == 0: # Set player 2 character
-      self.players.append(BarrelMan(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
+      self.players.append(BarrelMan(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
     elif player2option == 1:
-      self.players.append(Pog(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
+      self.players.append(Pog(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
     elif player2option == 2:
-      self.players.append(ErrorPlayer(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
+      self.players.append(ErrorPlayer(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
+    elif player2option == 3:
+      self.players.append(Kelvhan(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
     else:
-      self.players.append(Player(self, (WINDOW_SIZE[0] - 100, 100), 'right', 'P2', PLAYER_COLORS[1]))
+      self.players.append(Player(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
 
     self.allPlayers = self.players.copy()
     self.obstacles = [] # Create list of obstacles
@@ -1291,6 +1314,78 @@ class ErrorPlayer(Player):
     self.glitchedMode = False
     super().resetAbilities()
     self.bombCooldown = time.time()
+
+class Kelvhan(Player):
+
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+    super().__init__(game, 'assets/images/characters/kelvhan/kelvhan.png', coords, playerSide, hoverText, hoverTextColor)
+
+    # Create flame variables
+    self.flameLevel = 1
+    self.flameImageL1 = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/flame_symbol/level1.png'), (16, 16))
+    self.flameImageL2 = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/flame_symbol/level2.png'), (16, 16))
+    self.flameImageL3 = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/flame_symbol/level3.png'), (16, 16))
+    self.flameImageCoords = (0, 0)
+
+    # Create spell level
+    self.spellLevel = 0
+    self.spellLevelText = Text(TEXT_FONT_SMALL, '')
+    self.spellPotencyColors = ((192, 192, 4), (255, 117, 4), (255, 0, 0), (255, 255, 255))
+    self.spellLevelTimer = 0
+
+    
+  def update(self, game) -> None:
+    super().update(game)
+    self.updateSpellLevelTimer() # updtae spell level timer
+
+  def updateSpellLevelTimer(self):
+    if self.spellLevel < 9: # If the spell level is less than 9
+      self.spellLevelTimer += deltaT # Add to timer
+      if self.spellLevelTimer >= 1: # If spell timer has gone for a minute
+        self.spellLevel += 1 # Add one to spell level
+        self.spellLevelTimer = 0 # Reset timer
+
+  def drawHoverText(self):
+    # Draw hover text
+    self.hoverText.x = self.x + (self.width / 2) - (TEXT_FONT.size(self.hoverText.text)[0] / 2)
+    self.hoverText.y = self.y - 45
+    self.hoverText.update()
+
+    # Draw flame
+    self.flameImageCoords = (self.x + (self.width / 2)) - 20, self.y - 20 # Set coordinates of flame
+    if self.flameLevel == 1: # Put a certain flame on the screen based on flame level
+      WINDOW.blit(self.flameImageL1, self.flameImageCoords)
+    elif self.flameLevel == 2:
+      WINDOW.blit(self.flameImageL2, self.flameImageCoords)
+    elif self.flameLevel == 3:
+      WINDOW.blit(self.flameImageL3, self.flameImageCoords)
+
+    # Draw spell level
+    self.spellLevelText.text = str(self.spellLevel) # Set spell level text
+    self.spellLevelText.textColor = self.spellPotencyColors[self.spellLevel // 3] # Set spell level color
+    self.spellLevelText.x, self.spellLevelText.y = (self.x + (self.width / 2)) + 2, self.y - 20 # Set spell level coords
+    self.spellLevelText.update() # Update spell level text
+
+  def activateFirstAbility(self) -> bool:
+    if self.punchBtnPressed:
+      self.flameLevel += 1
+      if self.flameLevel > 3:
+        self.flameLevel = 1
+    else:
+      pass
+    return super().activateFirstAbility()
+
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
+    super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer, ignoreGroundRestrictions)
+    if self.spellLevel > 0:
+      self.spellLevel -= 1
+
+  def resetAbilities(self) -> None:
+    self.spellLevel = 0
+    super().resetAbilities()
+
+  
+    
 
 
 
