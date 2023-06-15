@@ -1317,6 +1317,7 @@ class ErrorPlayer(Player):
     self.bombCooldown = time.time()
 
 class Kelvhan(Player):
+  secondAbilityIsHeld = True
 
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, 'assets/images/characters/kelvhan/kelvhan.png', coords, playerSide, hoverText, hoverTextColor)
@@ -1333,14 +1334,22 @@ class Kelvhan(Player):
     self.spellLevelText = Text(TEXT_FONT_SMALL, '')
     self.spellPotencyColors = ((192, 192, 4), (255, 117, 4), (255, 0, 0), (255, 255, 255))
     self.spellLevelTimer = 0
+    self.spellTimerRun = True
+
+    # Second ability
+    self.heldFireball = None
+    self.distanceTravelled = 0
 
     
   def update(self, game) -> None:
     super().update(game)
     self.updateSpellLevelTimer() # updtae spell level timer
 
+    if self.heldFireball != None:
+      self.heldFireball.update(game)
+
   def updateSpellLevelTimer(self):
-    if self.spellLevel < 9: # If the spell level is less than 9
+    if self.spellTimerRun and self.spellLevel < 9: # If the spell level is less than 9
       self.spellLevelTimer += deltaT # Add to timer
       if self.spellLevelTimer >= 1: # If spell timer has gone for a minute
         self.spellLevel += 1 # Add one to spell level
@@ -1378,6 +1387,32 @@ class Kelvhan(Player):
       self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, -math.pi / 12))
       self.spellLevel -= self.flameLevel * 2
     return super().activateFirstAbility()
+  
+  def activateSecondAbility(self) -> bool:
+    if self.spellLevel >= 3:
+      self.spellTimerRun = False
+      newFireball = Fireball(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self, self.spellLevel, self.direction)
+      self.game.obstacles.append(newFireball)
+      self.heldFireball = newFireball
+      return super().activateSecondAbility()
+    return False
+  
+  def pressedSecondAbility(self) -> None:
+    addedDirection = 1100 * self.heldFireball.direction * deltaT
+    self.heldFireball.x += addedDirection
+    self.distanceTravelled += abs(addedDirection)
+    if self.distanceTravelled >= 480:
+      self.releaseSecondAbility()
+    super().pressedSecondAbility()
+
+  def releaseSecondAbility(self) -> None:
+    self.heldFireball.explosion.startExplosion((self.heldFireball.x, self.heldFireball.y))
+    self.heldFireball = None
+    self.distanceTravelled = 0
+    self.spellTimerRun = True
+    self.spellLevel = 0
+    self.spellLevelTimer = 0
+    super().releaseSecondAbility()
 
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
     super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer, ignoreGroundRestrictions)
@@ -1400,6 +1435,7 @@ class Obstacle(GameObject):
   def __init__(self, game, coords, img, immunePlayer = None, timer = None):
     self.width, self.height = img.get_width(), img.get_height()
     super().__init__(coords, (self.width, self.height), img)
+
     
     # Set variables
     self.game = game
@@ -1668,36 +1704,63 @@ class EnergyOrb(Obstacle):
 
 class Fire(Obstacle):
 
-  def __init__(self, game, coords, dimensions, img, immunePlayer=None, timer=5):
-    super().__init__(game, (coords[0] - (dimensions[0] / 2), coords[1] - (dimensions[1] / 2)), None, immunePlayer, timer)
+  def __init__(self, game, coords, dimensions, potency, immunePlayer=None, timer=5):
+    super().__init__(game, (coords[0] - (dimensions[0] / 2), coords[1] - (dimensions[1] / 2)), pygame.transform.scale(pygame.image.load('assets/images/objects/blank.png'), dimensions), immunePlayer, timer)
     self.width, self.height = dimensions
+    self.shotBy = immunePlayer
 
-    # Create animated sprites
-    self.redFire = AnimatedSprite('assets/images/objects/fire/red.png', (0, 0), 0.1, 100)
-    self.orangeRedFire = AnimatedSprite('assets/images/objects/fire/orange-red.png', (0, 0), 0.1, 100)
-    self.orangeFire = AnimatedSprite('assets/images/objects/fire/orange.png', (0, 0), 0.1, 100)
-    self.orangeYellowFire = AnimatedSprite('assets/images/objects/fire/orange-yellow.png', (0, 0), 0.1, 100)
-    self.yellowFire = AnimatedSprite('assets/images/objects/fire/yellow.png', (0, 0), 0.1, 100)
+    # Create animated fire sprites
+    self.redFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/red.png'), (0, 0), 0.1, 100)
+    self.orangeRedFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-red.png'), (0, 0), 0.1, 100)
+    self.orangeFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange.png'), (0, 0), 0.1, 100)
+    self.orangeYellowFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-yellow.png'), (0, 0), 0.1, 100)
+    self.yellowFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/yellow.png'), (0, 0), 0.1, 100)
+
+    # Put fire animated images in a list
     self.newFireList = [self.redFire, self.orangeRedFire, self.orangeFire, self.orangeYellowFire, self.yellowFire]
 
+    # Create timer variables
+    self.fireTimerScale = (self.width * self.height) / 1000
     self.fireTimer = 0
 
     self.fireList = []
 
+    # Variable that tells the obstacle whether it should disappear after all fire animations are done
+    self.removable = False
+
+    # Fire potency variable
+    self.potency = potency
+
   def update(self, game) -> None:
     super().update(game)
-    self.fireTimer == deltaT
-    if self.fireTimer >= 0.05:
+    self.fireTimer += deltaT
+    if not self.removable and self.fireTimer >= 0.05 / self.fireTimerScale: # Create a new fire animation after a certain amount of time
       newFire = self.newFireList[random.randint(0, 4)].copy()
-      self.fireList.append(newFire.scale(random.randint(5, 15)))
+      newFire.x = random.randint(round(self.x), round(self.x + self.width))
+      newFire.y = random.randint(round(self.y), round(self.y + self.height))
+      scaleFactor = random.randint(5, 15)
+      newFire.scale((scaleFactor, scaleFactor))
+      self.fireList.append(newFire)
+      self.fireTimer = 0
 
     removableFire = []
-    for fire in self.fireList:
+    for fire in self.fireList: # Update fire, if their animations are done, remove them
       fire.update()
       if fire.frame == fire.lastFrame:
         removableFire.append(fire)
     for fire in removableFire:
       self.fireList.remove(fire)
+
+    if self.removable and len(self.fireList) == 0: # Once fire timer runs out and all flame animations are done, remove this obstacle
+      self.mustBeRemoved = True
+
+    if not self.removable: # If the onbject is removable and animations are still wating to end
+      for player in self.game.players: # Deal continuous damage to any players touching fire
+        if self.rect.colliderect(player.rect) and player != self.shotBy:
+          player.setPercentage(self.shotBy, player.percentage + (self.potency * deltaT))
+
+  def belowZeroTimer(self) -> None:
+    self.removable = True
 
 
 class ScorchingRay(Obstacle):
@@ -1716,18 +1779,60 @@ class ScorchingRay(Obstacle):
     super().__init__(game, coords, pygame.transform.scale(image, (50, 8)), shotBy, 10)
     self.shotBy = shotBy
     self.usesGravity = False
-    self.xDir = 28 * self.shotBy.direction * math.cos(angleFromHori)
+    self.level = level # Remember the level of the scorching ray
+    self.xDir = 28 * self.shotBy.direction * math.cos(angleFromHori) # Set x and y movement
     self.yDir = 28 * math.sin(angleFromHori)
 
-  def onCollision(self, gameObject):
-    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), self.damage, self.knockbackModifyer)
-    self.mustBeRemoved = True
+  def onCollision(self, gameObject): # when the scorching ray hits a player or object
+    gameObject.onNormalAttack(self.shotBy, (self.x, self.y), self.damage, self.knockbackModifyer) # hit player
+    self.createFire() # Create fire at this spot
+    self.mustBeRemoved = True # Remove the ray
 
   def update(self, game) -> None:
     super().update(game)
-    for platform in game.platforms:
-      if self.rect.colliderect(platform.rect): # If ray hits a platform
+    for platform in game.platforms: # If the ray hits a platform, create fire and remove the ray
+      if self.rect.colliderect(platform.rect):
+        self.createFire()
         self.mustBeRemoved = True
+
+  def createFire(self):
+    if self.level == 4: # At levels 4 and 6, create fire
+      self.game.obstacles.append(Fire(self.game, (self.x, self.y), (45, 45), 2.8, self.shotBy, 3))
+    elif self.level == 6:
+      self.game.obstacles.append(Fire(self.game, (self.x, self.y), (105, 105), 7.5, self.shotBy, 7))
+
+class Fireball(Obstacle):
+
+  def __init__(self, game, coords, shotBy, level, direction):
+    self.level = level
+    self.shotBy = shotBy
+    self.radius = 80 + ((self.level - 3) * 24) # set radius - proportional to level Fireball is cast at
+    super().__init__(game, coords, pygame.transform.scale(pygame.image.load('assets/images/character_visuals/fireball_pointer.png'), (40, 40)))
+    explosionImg = AnimatedSprite(pygame.image.load('assets/images/explosions/fireball.png'), (0, 0), 0.03, 300) # Create explosion image
+    explosionImg.scale((self.radius, self.radius)) # Scale explosion image according to radius
+    self.explosion = util.CircularExplosion(self.radius, explosionImg) # Create explosion object
+    self.direction = direction # Set direction of which the pointer will travel in
+    self.gravity = False
+    self.punchable = False
+
+  def update(self, game) -> None:
+    super().update(game)
+
+    if self.explosion.isExploding:
+      for gameObject in self.game.players + self.game.obstacles: # Punch every player and punchable object that is in the explosion radius
+        if gameObject.punchable and self.explosion.hitGameObject(gameObject):
+          gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 8 + ((self.level - 3) * 2.7), 0.3 + ((self.level - 3) * 0.15)) # Scale damage and knockback based on spell level
+      self.explosion.update()
+      if self.explosion.atEnd:
+        if self.level >= 7: # Add fire in explosion if fireball was cast at 7th level or higher
+          self.game.obstacles.append(Fire(self.game, (self.x, self.y), (self.radius / 1.3, self.radius / 1.3), self.level * 1.25, self.shotBy, 4))
+        self.mustBeRemoved = True # Remove the explosion
+
+  def draw(self) -> None:
+    if not self.explosion.isExploding:
+      WINDOW.blit(self.img, (self.x - (self.img.get_width() / 2), self.y - (self.img.get_height() / 2))) # Draw the image
+    else:
+      self.explosion.draw()
 
   
 
