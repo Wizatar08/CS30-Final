@@ -1,0 +1,113 @@
+=========================
+KEYS:
+=========================
+
+Player 1 (red):
+- A: move left
+- D: move right
+- W: jump/double jump
+- S: down ability
+- B: punch key
+- N: first ability
+- M: second ability
+- H: shield
+
+Player 2 (blue):
+- LEFT ARROW KEY: move left
+- RIGHT ARROW KEY: move right
+- UP ARROW KEY: jump/double jump
+- DOWN ARROW KEY: down ability
+- NUMPAD1: punch key
+- NUMPAD2: first ability
+- NUMPAD3: second ability
+- NUMPAD5: shield
+
+Using ults:
+Press the first ability key when you are not moving to use ults
+You must break an ult ball before using your ult ability once
+
+=========================
+ABILITIES:
+=========================
+
+EVERYONE:
+
+Punch key: punch
+- Punch a player or object near you, in the direction you face
+
+BARREL MAN:
+
+First ability: Barrel roll
+- Press and hold first ability key when moving horizontally to roll around. Players and objects can be hit this way
+Second ability: Dagger toss
+- Press second ability key to toss 8 daggers around you
+Down ability: Sword slam
+- Press down while in the air to move down very fast, sticking a sword into the ground
+Ult ability: Giant barrel roll
+- Become giant and roll around the entire map, using horizontal movement keys to control movement
+
+POG:
+
+First ability: Pog shooter
+- Press key to shoot a projectile.
+- Hold this key for longer to shoot a bigger and more powerful projectile
+Second ability: Giant pog
+- Press key to toggle between regular and ginat Pog.
+- You can deal damage to enemies near you when giant, but movement is limited and other abilities cannot be used
+Down ability: Pog bomb
+- Press this key midair to shoot a pog bomb directly under you, exploding after a while
+Ult ability: Growth
+- Become huge for a while, knocking back everything that is near you for a while
+
+ERR://23¤Y%/:
+
+First ability: Dash/glitch
+- Press key to dash forward in the direction you are facing, leaving behind a glitch bomb
+- Press key while glitch bomb exists to instead detonate the bomb, making nearby enemy players incapacitated for a while
+- Bomb has a recharge, so during this recharge, you can still dash around, but you cannot spawn new bombs
+Second ability: Energy cube
+- Press key to shoot an energy cube in the direction you are facing
+- You can have three energy cubes maximum at a time
+- Press key while holding punch key to detonate all energy cubes at the same time, creating energy orbs going towards the player
+Down ability: Platform glitch
+- Press key to slam into nearby platform, glitching it
+- All objects/players on a platform when it begins glitching is launched upwards
+- Energy players standing on a glitched platform take continuous damage
+- If you stand on a platform, you receive continuous healing
+- Only one glitched platform can exist at a time, so using this ability whiole a glitched platofrm exists will still activate the movement, but no new glitched platforms will be created
+Ult ability: ERROR404
+- Glitch all platforms for a while
+- Incapacitate all nearby players
+- Shoot 5 energy orbs at the nearest player
+
+KELVHAN:
+
+Spell levels:
+- Above the player icon, there is a number, which represents spell level
+- Spell level can range from 0-9
+- Spell level increases by 1 each second
+- If you get hit by an attack, spell level decreases by 1
+- Spell levels determine potency of attacks for first and second ability
+
+First ability: Scorching ray
+- Press key to shoot 3 scorching rays in the direction you are facing
+- Potency of rays are shown through the flame symbol: yellow is weakest, orange is moderate, and red is strongest
+- Yellow rays do no knockback
+- Orange and red rays create fire on impact
+- Press key while holding attack to change potency
+- Potency also requires a certain spell level to use: yellow needs/consumes 2 spell levels, orange needs/consumes 4 spell levels, and red needs/consumes 6 spell levels
+Second ability: Fireball
+- Press and hold key to shoot fireball at a certain range away
+- Longer key is held, the farther away the fireball will spawn
+- Requires at least 3 spell levels to use
+- Higher spell level when fireball is created creates bigger and more dangerous fireballs
+- Fireball uses all spell levels
+- Fireballs cast at 7-9 level creates fire at explosion
+Down ability: Eye bubble
+- While in air, press down to create an eye bubble
+- Any player that touches the eye bubble is trapped; they cannot move or use abilities
+- Objects trapped in the bubble cannot be used: eg. Pog Bomb trapped in the bubble will not detonate
+- Has a short cooldown timer
+Ult ability: Time warp
+- Creates a time warp bubble: anything except the player who used the ability will have their movements slowed
+- Player will also have a fire aura around them during this time, where they can damage players with it
