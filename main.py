@@ -290,9 +290,9 @@ class Game:
         Text(TEXT_FONT_SMALL, 'Stocks: 3', (50 + (self.percentageXSpacingDiff * i), WINDOW_SIZE[1] - 30), PLAYER_COLORS[i])
       ]
 
-    self.currUltBall = None
-    self.ultBallSpawnTimeDelay = 3
-    self.ultBallSpawnTime = self.ultBallSpawnTimeDelay
+    self.currUltBall = None # Track current ult ball
+    self.ultBallSpawnTimeDelay = 60 # How much time is between ult ball spawns
+    self.ultBallSpawnTime = self.ultBallSpawnTimeDelay # How much time is left before an ult ball spawns
 
   def update(self) -> None:
     # Update players
@@ -305,20 +305,24 @@ class Game:
 
     # Player attack box collisions
     removablePlayers = []
-    for player in self.players:
-      for hitPlayer in self.players:
-        if player.attackBox != None:
-          if player != hitPlayer and player.attackBox.colliderect(hitPlayer.rect):
-            hitPlayer.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
-          else:
-            for obstacle in self.obstacles:
-              if player.attackBox.colliderect(obstacle.rect) and obstacle.punchable:
-                obstacle.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 10)
-      if player.stocks <= 0:
+    for player in self.players: # loop through players
+      if player.attackBox != None:
+        alreadyHit = False # When tracking obstacle hitting, see if a player was already hit
+        for hitPlayer in self.players: # See if a player is in range of the melee attack and if they are able to be attacked
+          if player != hitPlayer and hitPlayer.punchable and player.attackBox.colliderect(hitPlayer.rect):
+            hitPlayer.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 4) # If so, hit the player
+            alreadyHit = True # Make sure obstacles cannot be hit after this
+            break # Only one player can be hit; break out of the loop afterwards
+        if not alreadyHit: # If a player was not hit
+          for obstacle in self.obstacles: # Loop through obstacles, see if any obstacles within range can be hit
+            if player.attackBox.colliderect(obstacle.rect) and obstacle.punchable:
+              obstacle.onNormalAttack(player, (player.x + (player.width / 2), player.y + (player.height / 2)), 4) # Hit obstacle if they are able to
+              break # Only one thing is allowed to be hit
+      if player.stocks <= 0: # If player stocks is less than 0, remove from game
         removablePlayers.append(player)
     for player in removablePlayers:
       self.players.remove(player)
-    if len(self.players) == 1:
+    if len(self.players) == 1: # End game if there is only one player left
       global currMenu
       currMenu = EndScreen(self.allPlayers)
     
@@ -395,21 +399,28 @@ class GameObject:
     # Platform stats
     self.onTopOfPlatform = None
 
+    # Set time warp
+    self.timeWarping = 1
+
   def update(self, game) -> None:
-    self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
+    self.updateRect()
     if self.usesGravity: # if object uses gravity, apply gravity and, if this isn't a platform, detect if it hits a platform
       self.gravity()
       if not isinstance(self, Platform):
         self.collideWithPlatforms(game)
     self.move() # move object
     self.draw() # draw object
+    self.timeWarping = 1
     
     if self.isOutOfBounds():
       self.onOutOfBounds()
 
+  def updateRect(self):
+    self.rect.update(self.x, self.y, self.width, self.height) # Update rectangle
+
   def move(self) -> None:
-    self.x += self.xDir * 0.015 / deltaT # Change x and y positions based on time between frames and directions
-    self.y += self.yDir * 0.015 / deltaT
+    self.x += self.xDir * self.timeWarping * 0.015 / deltaT # Change x and y positions based on time between frames and directions
+    self.y += self.yDir * self.timeWarping * 0.015 / deltaT
 
   def draw(self) -> None:
     if self.img != None:
@@ -420,7 +431,7 @@ class GameObject:
     self.onTopOfPlatform = None
     for platform in game.platforms:
       collisionInfo = util.rectangleCollision(self.rect, platform.rect) # Get all the collision info for platform collision
-      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir > 0: # If the object is falling and hits the top of a platform (bottom of object hits platform)
+      if collisionInfo[util.COLLIDE_BOTTOM] and self.yDir >= 0: # If the object is falling and hits the top of a platform (bottom of object hits platform)
         self.onLandOnPlatform(platform) # Run code to hit platform
       if collisionInfo[util.COLLIDE_TOP] and self.yDir < 0: # If the object is going upwards and htis the bottom of a platform
         self.y -= self.yDir # Stop upwards movement
@@ -429,7 +440,7 @@ class GameObject:
         self.x -= self.xDir # Stop the object
 
   def gravity(self) -> None:
-    self.yDir += 0.2 # Add 2 to the vertical movement of the character going down
+    self.yDir += 0.2 * self.timeWarping # Add 2 times time warping to the vertical movement of the character going down
 
   def onLandOnPlatform(self, platform) -> None: # Code used to hit platform from the bottom
     self.onTopOfPlatform = platform
@@ -572,6 +583,7 @@ class Player(GameObject):
     self.damageReceived = 0
     self.healingReceived = 0
     self.recentlyAttackedBy = None
+    self.invulnerabilityTime = 0
 
     # Ult glow image
     self.ultGlowImage = pygame.transform.scale(pygame.image.load('assets/images/character_visuals/ult_glow.png'), (64, 64))
@@ -594,6 +606,8 @@ class Player(GameObject):
       self.duringUltAbility()
       if self.activeAbilities['ult'] <= 0:
         self.endUltAbility()
+    if self.invulnerabilityTime > 0:
+      self.invulnerabilityTime -= deltaT
 
   def draw(self, image = None) -> None:
     if image == None:
@@ -670,12 +684,12 @@ class Player(GameObject):
       self.punchBtnPressed = False
       self.ultControl = False
 
-  def onLandOnPlatform(self, platform):
-    self.y = platform.rect.top - self.height
-    self.yDir = 0
-    self.inAir = False
-    self.remainingAirJumps = self.totalAirJumps
-    self.onTopOfPlatform = platform
+  def onLandOnPlatform(self, platform): # When player lands on a platform
+    self.y = platform.rect.top - self.height # set y so that the player is right on top of the platform
+    self.yDir = 0 # Make sure there is no y direction
+    self.inAir = False # Track that the player is not in the air
+    self.remainingAirJumps = self.totalAirJumps # Reset air jumps
+    self.onTopOfPlatform = platform # Track the platform the p;ayer is on top of
 
   def detectControls(self) -> None:
 
@@ -764,7 +778,8 @@ class Player(GameObject):
       self.recentlyAttackedBy.dealtKos += 1
     self.setPercentage(None, 0)
     self.game.setPlayerStocks(self, self.stocks) # Remove 1 from stocks
-    #self.recentlyAttackedBy = None
+    self.recentlyAttackedBy = None
+    self.invulnerabilityTime = 3 # Make player invulnerable for 3 seconds
     self.resetAbilities() # Reset abilties
 
   def changeSize(self, newDimensions) -> None:
@@ -775,7 +790,7 @@ class Player(GameObject):
     self.rect.width = self.width # Set rectangle sizes
     self.rect.height = self.height
 
-  def setPercentage(self, source, percentage):
+  def setPercentage(self, source, percentage, overrideInvulnerability = False):
     oldPercentage = self.percentage
     self.percentage = percentage # Set their percentages to be equal to 0
     if self.percentage < 0:
@@ -784,7 +799,7 @@ class Player(GameObject):
     self.recentlyAttackedBy = source
 
     # update percentage stats
-    if self.percentage > oldPercentage:
+    if self.percentage > oldPercentage and (overrideInvulnerability or self.invulnerabilityTime <= 0): # If the percentage adds to current percentage and the player is not immune or invulnerability is overridden
       percentDiff = self.percentage - oldPercentage
       self.damageReceived += percentDiff
       if source != None:
@@ -846,6 +861,7 @@ class Player(GameObject):
     self.ultControl = False
     self.activeAbilities['ult'] = float(time)
     self.hasUlt = False
+    self.invulnerabilityTime = time # Make sure player doing ult cannot be hit
   
   def duringUltAbility(self) -> None:
     self.activeAbilities['ult'] -= deltaT
@@ -858,7 +874,7 @@ class Player(GameObject):
     self.remainingAirJumps = self.totalAirJumps
 
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer = 1, ignoreGroundRestrictions = False) -> None:
-    if not self.shieldActive: # If player shield is down
+    if not self.shieldActive and self.invulnerabilityTime <= 0: # If player shield is down
       super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer * 2 * ((self.percentage // 50) + 1), ignoreGroundRestrictions)
       self.setPercentage(source, self.percentage + damage)
 
@@ -1316,6 +1332,8 @@ class ErrorPlayer(Player):
     super().resetAbilities()
     self.bombCooldown = time.time()
 
+# KELVHAN PLAYER CLASS
+
 class Kelvhan(Player):
   secondAbilityIsHeld = True
 
@@ -1340,10 +1358,20 @@ class Kelvhan(Player):
     self.heldFireball = None
     self.distanceTravelled = 0
 
+    # Down ability
+    self.heldEyeObject = None
+    self.abilityDelayTimer = 0
+
+    # Ult ability
+    self.ultFire = None
+
     
   def update(self, game) -> None:
     super().update(game)
     self.updateSpellLevelTimer() # updtae spell level timer
+
+    if self.abilityDelayTimer >= 0:
+      self.abilityDelayTimer -= deltaT
 
     if self.heldFireball != None:
       self.heldFireball.update(game)
@@ -1379,7 +1407,7 @@ class Kelvhan(Player):
   def activateFirstAbility(self) -> bool:
     if self.punchBtnPressed:
       self.flameLevel += 1
-      if self.flameLevel > 3:
+      if self.flameLevel > 4.5:
         self.flameLevel = 1
     elif self.spellLevel >= self.flameLevel * 2:
       self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, 0))
@@ -1414,9 +1442,35 @@ class Kelvhan(Player):
     self.spellLevelTimer = 0
     super().releaseSecondAbility()
 
+  def activateDownwardsAbility(self) -> bool:
+    if self.heldEyeObject == None and self.abilityDelayTimer <= 0:
+      newEyeShot = EyeShot(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self)
+      self.heldEyeObject = newEyeShot
+      self.game.obstacles.append(self.heldEyeObject)
+      self.abilityDelayTimer = 6
+      return super().activateDownwardsAbility()
+    return False
+  
+  def activateUltAbility(self) -> None:
+    warpTime = 7 # Set a time, which will be how long the ult and each of the abilities last
+    self.game.obstacles.append(TimeWarp(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self, warpTime))
+    self.spellLevel = 9
+    super().activateUltAbility(warpTime)
+    self.ultFire = Fire(self.game, (self.x, self.y), (175, 175), 15, self, warpTime)
+
+  def duringUltAbility(self) -> None:
+    self.ultFire.x = self.x + (self.width / 2) - (self.ultFire.width / 2)
+    self.ultFire.y = self.y + (self.height / 2) - (self.ultFire.height / 2)
+    self.ultFire.update(self.game)
+    return super().duringUltAbility()
+  
+  def endUltAbility(self) -> None:
+    self.ultFire = None
+    super().endUltAbility()
+
   def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
     super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer, ignoreGroundRestrictions)
-    if self.spellLevel > 0:
+    if self.spellLevel > 0 and self.invulnerabilityTime <= 0:
       self.spellLevel -= 1
 
   def resetAbilities(self) -> None:
@@ -1447,6 +1501,8 @@ class Obstacle(GameObject):
       if gameObject != self.immunePlayer and gameObject.punchable:
         self.detectHitObjects.append(gameObject)
     self.mustBeRemoved = False # Variable used to tell the game when the obstacle should be removed from the game
+
+    self.usesEffects = True # Variable that allows the object to use effects when activated
     
 
   def update(self, game) -> None:
@@ -1607,12 +1663,12 @@ class PogBomb(Obstacle):
       self.explosion.draw()
 
   def belowZeroTimer(self) -> None:
-    if not self.explosion.isExploding: # On the first frame where the bomb explodes, create the circle
+    if self.usesEffects and not self.explosion.isExploding: # On the first frame where the bomb explodes, create the circle
       self.explosion.startExplosion((self.x + (self.width / 2), self.y + (self.height / 2)))
     self.isExploding = True
     self.punchable = False
     self.explosion.update()
-    if self.explosion.atEnd: # Remove the obstacle if the animation is on its last frame
+    if not self.usesEffects or self.explosion.atEnd: # Remove the obstacle if the animation is on its last frame
       self.mustBeRemoved = True
 
   def detectCollision(self) -> None:
@@ -1649,9 +1705,12 @@ class GlitchBomb(Obstacle):
     return super().update(game)
   
   def detonate(self):
-    self.isExploding = True # Explode
-    self.explosion.startExplosion((self.x + (self.width / 2), self.y + (self.height / 2)))
-    self.punchable = False # make sure the explosion can't be punched
+    if self.usesEffects:
+      self.isExploding = True # Explode
+      self.explosion.startExplosion((self.x + (self.width / 2), self.y + (self.height / 2)))
+      self.punchable = False # make sure the explosion can't be punched
+    else:
+      self.mustBeRemoved = True
   
   def detectCollision(self) -> None:
     if self.explosion.isExploding: # Make sure the explosion circle exists
@@ -1670,7 +1729,8 @@ class EnergyCube(Obstacle):
 
   def activate(self): # If the player activates all the cubes
     self.mustBeRemoved = True # Remove from game
-    self.game.obstacles.append(EnergyOrb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), (self.shotByPlayer.x + (self.shotByPlayer.width / 2), self.shotByPlayer.y + (self.shotByPlayer.height / 2)), self.shotByPlayer)) # Create an energy orb, shoot it towards the activating player
+    if self.usesEffects:
+      self.game.obstacles.append(EnergyOrb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), (self.shotByPlayer.x + (self.shotByPlayer.width / 2), self.shotByPlayer.y + (self.shotByPlayer.height / 2)), self.shotByPlayer)) # Create an energy orb, shoot it towards the activating player
 
 class EnergyOrb(Obstacle):
 
@@ -1762,7 +1822,6 @@ class Fire(Obstacle):
   def belowZeroTimer(self) -> None:
     self.removable = True
 
-
 class ScorchingRay(Obstacle):
 
   def __init__(self, game, coords, level, shotBy, angleFromHori):
@@ -1799,7 +1858,7 @@ class ScorchingRay(Obstacle):
     if self.level == 4: # At levels 4 and 6, create fire
       self.game.obstacles.append(Fire(self.game, (self.x, self.y), (45, 45), 2.8, self.shotBy, 3))
     elif self.level == 6:
-      self.game.obstacles.append(Fire(self.game, (self.x, self.y), (105, 105), 7.5, self.shotBy, 7))
+      self.game.obstacles.append(Fire(self.game, (self.x, self.y), (105, 105), 7.5, self.shotBy, 6.5))
 
 class Fireball(Obstacle):
 
@@ -1825,7 +1884,7 @@ class Fireball(Obstacle):
       self.explosion.update()
       if self.explosion.atEnd:
         if self.level >= 7: # Add fire in explosion if fireball was cast at 7th level or higher
-          self.game.obstacles.append(Fire(self.game, (self.x, self.y), (self.radius / 1.3, self.radius / 1.3), self.level * 1.25, self.shotBy, 4))
+          self.game.obstacles.append(Fire(self.game, (self.x, self.y), (self.radius / 1.3, self.radius / 1.3), self.level * 0.8, self.shotBy, 4))
         self.mustBeRemoved = True # Remove the explosion
 
   def draw(self) -> None:
@@ -1834,6 +1893,97 @@ class Fireball(Obstacle):
     else:
       self.explosion.draw()
 
+class EyeShot(Obstacle):
+
+  def __init__(self, game, centerCoords, shotBy):
+    super().__init__(game, centerCoords, pygame.image.load('assets/images/objects/eye_shot.png'), None, 5)
+    self.x -= self.width / 2 # Set x and y to be at the corner of the image
+    self.y -= self.height / 2
+    self.usesGravity = False
+    self.shotBy = shotBy
+    self.xDir = 0 # Make sure this object goes straight down
+    self.yDir = 8
+
+  def update(self, game) -> None:
+    super().update(game)
+
+    for platform in self.game.platforms: # If it hits a platform, remove it from the game
+      if self.rect.colliderect(platform.rect):
+        self.mustBeRemoved = True
+        self.shotBy.heldEyeObject = None
+
+  def onCollision(self, gameObject):
+    if gameObject != self.shotBy: # If it hits a gameObject
+      self.mustBeRemoved = True # Remove from game
+      trappingEyeBubble = TrappingEyeBubble(self.game, (gameObject.x + (gameObject.width / 2), gameObject.y + (gameObject.height / 2)), self.shotBy, gameObject) # Trap the object in an eye bubble
+      self.shotBy.heldEyeObject = trappingEyeBubble # Add it to the game and track the player is using the eye bubble
+      self.game.obstacles.append(trappingEyeBubble)
+
+class TrappingEyeBubble(Obstacle):
+
+  def __init__(self, game, centerCoords, shotBy, trappedObject):
+    self.trappedTime = 3.5
+    super().__init__(game, centerCoords, pygame.image.load('assets/images/objects/eye_bubble.png'), None, self.trappedTime)
+    self.centerCoords = self.x, self.y
+    self.x -= self.width / 2 # Set coords to be at the corner of the image
+    self.y -= self.height / 2
+    self.objectWidth, self.objectHeight = trappedObject.width, trappedObject.height # Set new rectangle dimensions (it should be smaller than the actual image)
+    self.shotBy = shotBy
+    self.trappedObject = trappedObject # Set trapped object
+    if isinstance(self.trappedObject, Player): # incapacitate players. if it is a player
+      self.trappedObject.incapacitate(self.trappedTime)
+    self.usesGravity = True
+    self.punchable = True
+    self.trappedObject.punchable = False # Make sure the object inside cannot be punched
+    if isinstance(self.trappedObject, Player): # Incapacitate player
+      self.trappedObject.incapacitate(self.trappedTime)
+    elif isinstance(self.trappedObject, Obstacle): # Make sure object effects cannot be used
+      self.trappedObject.usesEffects = False
+
+  def update(self, game) -> None:
+    self.centerCoords = self.x + (self.width / 2), self.y + (self.height / 2)
+    self.trappedObject.x = self.centerCoords[0] - (self.trappedObject.width / 2) # Set the x and y values of the trapped object
+    self.trappedObject.y = self.centerCoords[1] - (self.trappedObject.height / 2)
+    self.trappedObject.xDir = 0 # Make sure the object cannot move
+    self.trappedObject.yDir = 0
+    super().update(game)
+    if self.mustBeRemoved: # When the object is removed
+      self.shotBy.heldEyeObject = None # Reset holding variable for Kelvhan
+      self.trappedObject.punchable = True # Allow the trapped object to be punchable again
+      if isinstance(self.trappedObject, Obstacle): # Allow obstacles effects to be used again
+        self.trappedObject.usesEffects = True
+
+  def updateRect(self):
+    self.rect.update(self.x + (self.width / 2) - (self.objectWidth / 2), self.y + (self.height / 2) - (self.objectHeight / 2), self.objectWidth, self.objectHeight)
+
+  def onLandOnPlatform(self, platform) -> None: # Code used to hit platform from the bottom
+    self.onTopOfPlatform = platform
+    self.y = platform.rect.top - (self.height / 2) - (self.objectHeight / 2) # Set y position so bottom of object is touching the platform
+    self.xDir = 0
+    if self.yDir > 20: # Bounce object 
+      self.yDir *= -1
+    else:
+      self.yDir = 0 # Stop the object from moving
+      self.inAir = False
+
+  def onNormalAttack(self, source, sourceCoords, damage, knockbackMultiplyer=1, ignoreGroundRestrictions=False) -> None:
+    super().onNormalAttack(source, sourceCoords, damage, knockbackMultiplyer, ignoreGroundRestrictions) # Allow this object to get knockback
+    self.trappedObject.onNormalAttack(source, sourceCoords, damage, 0) # Transfer all damage normally given to this bubble to the object inside
+
+class TimeWarp(Obstacle):
+
+  def __init__(self, game, centerCoords, shotBy, warpTime):
+    self.size = 650
+    super().__init__(game, (centerCoords[0] - (self.size / 2), centerCoords[1] - (self.size / 2)), pygame.transform.scale(pygame.image.load('assets/images/objects/time_warp.png'), (self.size, self.size)), shotBy, warpTime)
+    self.warpCircle = util.Circle(centerCoords, self.size / 2) # Create warp hitting circle
+    self.usesGravity = False
+    self.shotBy = shotBy
+
+  def update(self, game) -> None:
+    super().update(game)
+    for gameObject in self.game.players + self.game.obstacles: # If an object or player hits the object
+      if util.rectangleCircleCollision(gameObject.rect, self.warpCircle) and gameObject != self and gameObject != self.shotBy:
+        gameObject.timeWarping = 0.125 # Slow down the player to 12.5% its regular speed
   
 
 
