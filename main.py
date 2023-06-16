@@ -4,7 +4,7 @@ import pygame.locals as gameGlobals
 pygame.init() # Initialize pygame
 
 WINDOW_SIZE = (800, 600) # Set window sizes
-pygame.display.set_caption("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+pygame.display.set_caption("Super Smash Bros but with a $0 budget")
 
 TEXT_FONT = pygame.font.Font("assets/fonts/Koulen-Regular.ttf", 32) # Create fonts
 TEXT_FONT_SMALL = pygame.font.Font("assets/fonts/Koulen-Regular.ttf", 16)
