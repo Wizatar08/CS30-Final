@@ -36,6 +36,10 @@ class MainMenu:
     ] # Create menu options
     self.currentIndex = 0
 
+    # Create menu navigation text
+    self.menuNav = Text(TEXT_FONT_SMALL, 'Use arrow keys to navigate menu, press SPACE when bottom option is selected to start', (0, WINDOW_SIZE[1] - 75))
+    self.menuNav.x = (WINDOW_SIZE[0] / 2) - (TEXT_FONT_SMALL.size(self.menuNav.text)[0] / 2) # Set x position
+
     self.mapSetup = [
       [ # MAP 1: flat
         Platform((-50, 450), (900, 600))
@@ -63,6 +67,7 @@ class MainMenu:
       self.menuOptions[i].isSelected = i == self.currentIndex # If the current index is on it, say that this is selected
       self.menuOptions[i].update() # Update
     self.detectKey() # Detect keys
+    self.menuNav.update() # Update menu text
 
     if self.startMenuOption.spaceTapped: # If the start button is pressed
       global currMenu
