@@ -10,7 +10,7 @@ TEXT_FONT = pygame.font.Font("assets/fonts/Koulen-Regular.ttf", 32) # Create fon
 TEXT_FONT_SMALL = pygame.font.Font("assets/fonts/Koulen-Regular.ttf", 16)
 
 PLAYER_COLORS = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (127, 127, 0)]
-
+egtsgsdgfsgsdgfsgdsgfsgvs
 WINDOW = pygame.display.set_mode(WINDOW_SIZE)
 
 fpsClock = pygame.time.Clock() # Create clock, tracks FPS and time between frames
