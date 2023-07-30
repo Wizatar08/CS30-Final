@@ -111,3 +111,16 @@ Down ability: Eye bubble
 Ult ability: Time warp
 - Creates a time warp bubble: anything except the player who used the ability will have their movements slowed
 - Player will also have a fire aura around them during this time, where they can damage players with it
+
+
+TO BE ADDED BEFORE END OF 
+>>> Driller
+- Energy meter
+- AB1: flamethrower
+- AB2: Drill rush
+- DOWN: Drill down
+- ULT: to be decided
+>>> Knight
+- Abilities to be decided
+>>> Pekka???
+- Abilities to be decided
