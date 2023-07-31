@@ -29,8 +29,8 @@ class MainMenu:
     standardMenuWidth = 512
     self.startMenuOption = MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 320), (standardMenuWidth, 65), TEXT_FONT, "START")
     self.menuOptions = [
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERR://23¤Y%/", "Player 1: Kelvhan"),
-      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERR://23¤Y%/", "Player 2: Kelvhan"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 80), (standardMenuWidth, 65), TEXT_FONT, "Player 1: Barrel Man", "Player 1: Pog", "Player 1: ERR://23¤Y%/", "Player 1: Kelvhan", "Player 1: Driller"),
+      MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 160), (standardMenuWidth, 65), TEXT_FONT, "Player 2: Barrel Man", "Player 2: Pog", "Player 2: ERR://23¤Y%/", "Player 2: Kelvhan", "Player 2: Driller"),
       MenuOption(((WINDOW_SIZE[0] // 2) - (standardMenuWidth // 2), 240), (standardMenuWidth, 65), TEXT_FONT, "Map: Flat", "Map: Elevation", "Map: Squared"),
       self.startMenuOption
     ] # Create menu options
@@ -269,6 +269,8 @@ class Game:
       self.players.append(ErrorPlayer(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
     elif player1option == 3:
       self.players.append(Kelvhan(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
+    elif player1option == 4:
+      self.players.append(Driller(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
     else:
       self.players.append(Player(self, spawnCoords[0], 'left', 'P1', PLAYER_COLORS[0]))
 
@@ -280,6 +282,8 @@ class Game:
       self.players.append(ErrorPlayer(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
     elif player2option == 3:
       self.players.append(Kelvhan(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
+    elif player2option == 4:
+      self.players.append(Driller(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
     else:
       self.players.append(Player(self, spawnCoords[1], 'right', 'P2', PLAYER_COLORS[1]))
 
@@ -474,6 +478,9 @@ class GameObject:
     
   def onOutOfBounds(self):
     pass
+  
+  def getCenterCoords(self):
+    return self.x + (self.width / 2), self.y + (self.height / 2)
 
 
 # PLATFORM CLASS
@@ -553,6 +560,7 @@ class Player(GameObject):
     self.speedLocked = False
     self.direction = 1 # Sets which direction the character is facing (1 for right, -1 for left)
     self.incapacitatedTimers = (0, 0)
+    self.slowTimers = (0, 0)
 
     # Controls
     self.leftControl = False
@@ -613,6 +621,10 @@ class Player(GameObject):
         self.endUltAbility()
     if self.invulnerabilityTime > 0:
       self.invulnerabilityTime -= deltaT
+    if self.slowTimers[1] > 0:
+      self.slowTimers = (self.slowTimers[0], self.slowTimers[1] - deltaT)
+    elif self.slowTimers[1] <= 0 and self.slowTimers[0] != 0:
+      self.slowTimers = (0, 0)
 
   def draw(self, image = None) -> None:
     if image == None:
@@ -718,15 +730,15 @@ class Player(GameObject):
       if self.leftControl: # Move left if a is pressed
         self.direction = -1
         if not self.inAir: # Constant velocity if on ground
-          self.xDir = -self.horizontalSpeed
+          self.xDir = -self.horizontalSpeed * (1 - self.slowTimers[0])
         elif self.xDir > -self.horizontalSpeed: # Changing velocity if in air
-          self.xDir -= 0.5 / self.weight
+          self.xDir -= (0.5 * (1 - self.slowTimers[0])) / self.weight
       elif self.rightControl: # Move right if d is pressed
         self.direction = 1
         if not self.inAir: # Constant velocity if on ground
-          self.xDir = self.horizontalSpeed
+          self.xDir = self.horizontalSpeed * (1 - self.slowTimers[0])
         elif self.xDir < self.horizontalSpeed: # Changing velocity if in air
-          self.xDir += 0.5 / self.weight
+          self.xDir += (0.5 * (1 - self.slowTimers[0])) / self.weight
       elif not self.inAir: # Stop moving horizontally if none are pressed
         self.xDir = 0
       else:
@@ -773,7 +785,13 @@ class Player(GameObject):
 
   def incapacitate(self, timeLength):
     self.incapacitatedTimers = (time.time(), timeLength)
-
+    
+  def slow(self, potency, timeLength):
+    if self.slowTimers == (0, 0):
+      self.slowTimers = (potency, timeLength)
+    elif self.slowTimers[0] > potency or timeLength > self.slowTimers[1]:
+      self.slowTimers = (self.slowTimers[0], timeLength)
+      
   def onOutOfBounds(self) -> None:
     self.x, self.y = self.spawnCoords # Reset their position
     self.xDir, self.yDir = (0, 0) # Set their movement to be frozen
@@ -1412,7 +1430,7 @@ class Kelvhan(Player):
   def activateFirstAbility(self) -> bool:
     if self.punchBtnPressed:
       self.flameLevel += 1
-      if self.flameLevel > 4.5:
+      if self.flameLevel > 3:
         self.flameLevel = 1
     elif self.spellLevel >= self.flameLevel * 2:
       self.game.obstacles.append(ScorchingRay(self.game, (self.x, self.y), self.flameLevel * 2, self, 0))
@@ -1483,7 +1501,88 @@ class Kelvhan(Player):
     super().resetAbilities()
 
   
+class Driller(Player):
+  firstAbilityIsHeld = True
+  
+  def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
+    super().__init__(game, 'assets/images/characters/driller/driller.png', coords, playerSide, hoverText, hoverTextColor)
     
+    # ENERGY BARS
+    self.fireBarOutline = pygame.image.load('assets/images/character_visuals/driller_energy_bar/fire_outline.png')
+    self.fireBarFill = pygame.image.load('assets/images/character_visuals/driller_energy_bar/fire_fill.png')
+    self.iceBarOutline = pygame.image.load('assets/images/character_visuals/driller_energy_bar/ice_outline.png')
+    self.iceBarFill = pygame.image.load('assets/images/character_visuals/driller_energy_bar/ice_fill.png')
+    
+    self.barCoords = (0, 0)
+    self.energyMeterMax = 100
+    self.energyMeter = self.energyMeterMax
+    self.fillEnergyBar = True
+    self.particleTimer = 0
+    
+    # Energy types
+    self.energyTypes = ['fire', 'ice']
+    self.energyTypeIndex = 0
+    self.energyType = self.energyTypes[self.energyTypeIndex]
+    
+  def drawHoverText(self):
+    # Draw hover text
+    self.hoverText.x = self.x + (self.width / 2) - (TEXT_FONT.size(self.hoverText.text)[0] / 2)
+    self.hoverText.y = self.y - 40
+    self.hoverText.update()
+    
+    # Calculate energy bar coords
+    self.barCoords = (self.x + (self.width / 2) - (self.fireBarOutline.get_width() / 2), self.y - (self.fireBarOutline.get_height()) - 5)
+    
+    # Get fill length for energy bar
+    fillDimensions = (0, 0, self.fireBarFill.get_width() * (self.energyMeter / self.energyMeterMax), self.fireBarFill.get_height())
+    
+    if self.energyType == 'fire':
+      WINDOW.blit(self.fireBarOutline, self.barCoords)
+      WINDOW.blit(self.fireBarFill, (self.barCoords[0] + 2, self.barCoords[1] + 2), fillDimensions)
+    elif self.energyType == 'ice':
+      WINDOW.blit(self.iceBarOutline, self.barCoords)
+      WINDOW.blit(self.iceBarFill, (self.barCoords[0] + 2, self.barCoords[1] + 2), fillDimensions)
+    
+  def update(self, game) -> None:
+    super().update(game)
+    if self.fillEnergyBar:
+      if self.energyMeter < 100:
+        self.energyMeter += deltaT * 20
+      else:
+        self.energyMeter = 100
+        
+    
+  def activateFirstAbility(self, time=0, endable=False) -> bool:
+    if self.punchBtnPressed:
+      self.energyTypeIndex += 1
+      if self.energyTypeIndex >= len(self.energyTypes):
+        self.energyTypeIndex = 0
+      self.energyType = self.energyTypes[self.energyTypeIndex]
+      return False
+    self.fillEnergyBar = False
+    return super().activateFirstAbility(time, endable)
+  
+  def pressedFirstAbility(self) -> None:
+    self.particleTimer += deltaT
+    self.energyMeter -= deltaT * 100
+    if self.energyMeter >= 0:
+      if self.particleTimer >= 0.05:
+        dimensionLength = random.randint(10, 50)
+        if self.direction == 1:
+          angle = (random.random() * (math.pi / 12)) + (7/4 * math.pi) 
+        else:
+          angle = (random.random() * (math.pi / 12)) + (7/6 * math.pi) 
+        speed = (random.random() * 3) + 5
+        if self.energyType == 'fire':
+          self.game.obstacles.append(Fire(self.game, self.getCenterCoords(), (dimensionLength, dimensionLength), 0.5, self, 4.5, True, speed, angle))
+        elif self.energyType == 'ice':
+          self.game.obstacles.append(FrostCloud(self.game, self.getCenterCoords(), (dimensionLength, dimensionLength), 0.8, 0.75, self, 4.5, True, speed, angle))
+    else:
+      self.releaseFirstAbility()
+  
+  def releaseFirstAbility(self, time=0, endable=False) -> None:
+    self.fillEnergyBar = True
+    return super().releaseFirstAbility(time, endable)
 
 
 
@@ -1767,65 +1866,105 @@ class EnergyOrb(Obstacle):
   def onCollision(self, gameObject):
     gameObject.onNormalAttack(self.shotBy, (self.x, self.y), 12, 0.9) # Punch the game object
 
-class Fire(Obstacle):
-
-  def __init__(self, game, coords, dimensions, potency, immunePlayer=None, timer=5):
+class ParticleObstacle(Obstacle):
+  
+  def __init__(self, game, coords, dimensions, sprites, immunePlayer = None, timer = 5, moves = False, speed = 0, angle = 0):
     super().__init__(game, (coords[0] - (dimensions[0] / 2), coords[1] - (dimensions[1] / 2)), pygame.transform.scale(pygame.image.load('assets/images/objects/blank.png'), dimensions), immunePlayer, timer)
+    
     self.width, self.height = dimensions
     self.shotBy = immunePlayer
-
-    # Create animated fire sprites
-    self.redFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/red.png'), (0, 0), 0.1, 100)
-    self.orangeRedFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-red.png'), (0, 0), 0.1, 100)
-    self.orangeFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange.png'), (0, 0), 0.1, 100)
-    self.orangeYellowFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-yellow.png'), (0, 0), 0.1, 100)
-    self.yellowFire = AnimatedSprite(pygame.image.load('assets/images/objects/fire/yellow.png'), (0, 0), 0.1, 100)
-
-    # Put fire animated images in a list
-    self.newFireList = [self.redFire, self.orangeRedFire, self.orangeFire, self.orangeYellowFire, self.yellowFire]
+    
+    self.allParticlesList = sprites
 
     # Create timer variables
-    self.fireTimerScale = (self.width * self.height) / 1000
-    self.fireTimer = 0
-
-    self.fireList = []
+    self.particleTimerScale = (self.width * self.height) / 1000
+    self.particleTimer = 0
+    
+    self.particleList = []
 
     # Variable that tells the obstacle whether it should disappear after all fire animations are done
     self.removable = False
-
-    # Fire potency variable
-    self.potency = potency
+    
+    # Movement
+    self.usesGravity = moves
+    if moves:
+      self.xDir = math.cos(angle) * speed
+      self.yDir = math.sin(angle) * speed
 
   def update(self, game) -> None:
     super().update(game)
-    self.fireTimer += deltaT
-    if not self.removable and self.fireTimer >= 0.05 / self.fireTimerScale: # Create a new fire animation after a certain amount of time
-      newFire = self.newFireList[random.randint(0, 4)].copy()
-      newFire.x = random.randint(round(self.x), round(self.x + self.width))
-      newFire.y = random.randint(round(self.y), round(self.y + self.height))
+    self.particleTimer += deltaT
+    if not self.removable and self.particleTimer >= 0.05 / self.particleTimerScale: # Create a new fire animation after a certain amount of time
+      newP = self.allParticlesList[random.randint(0, len(self.allParticlesList) - 1)].copy()
+      newP.x = random.randint(round(self.x), round(self.x + self.width))
+      newP.y = random.randint(round(self.y), round(self.y + self.height))
       scaleFactor = random.randint(5, 15)
-      newFire.scale((scaleFactor, scaleFactor))
-      self.fireList.append(newFire)
-      self.fireTimer = 0
+      newP.scale((scaleFactor, scaleFactor))
+      self.particleList.append(newP)
+      self.particleTimer = 0
 
-    removableFire = []
-    for fire in self.fireList: # Update fire, if their animations are done, remove them
-      fire.update()
-      if fire.frame == fire.lastFrame:
-        removableFire.append(fire)
-    for fire in removableFire:
-      self.fireList.remove(fire)
+    removableParticles = []
+    for particle in self.particleList: # Update particles, if their animations are done, remove them
+      particle.update()
+      if particle.frame == particle.lastFrame:
+        removableParticles.append(particle)
+    for particle in removableParticles:
+      self.particleList.remove(particle)
 
-    if self.removable and len(self.fireList) == 0: # Once fire timer runs out and all flame animations are done, remove this obstacle
+    if self.removable and len(self.particleList) == 0: # Once particle timer runs out and all flame animations are done, remove this obstacle
       self.mustBeRemoved = True
 
     if not self.removable: # If the onbject is removable and animations are still wating to end
-      for player in self.game.players: # Deal continuous damage to any players touching fire
+      for player in self.game.players:
         if self.rect.colliderect(player.rect) and player != self.shotBy:
-          player.setPercentage(self.shotBy, player.percentage + (self.potency * deltaT))
+          self.onHit(player)
+          
+  def onHit(self, player):
+    pass
 
   def belowZeroTimer(self) -> None:
     self.removable = True
+
+class Fire(ParticleObstacle):
+
+  def __init__(self, game, coords, dimensions, potency, immunePlayer=None, timer=5, moves = False, speed = 0, angle = 0):
+    super().__init__(game, coords, dimensions, [
+        AnimatedSprite(pygame.image.load('assets/images/objects/fire/red.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-red.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/fire/orange-yellow.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/fire/yellow.png'), (0, 0), 0.1, 100)
+      ],
+      immunePlayer, timer, moves, speed, angle
+    )
+
+    # Fire potency variable
+    self.potency = potency
+          
+  def onHit(self, player):
+    player.setPercentage(self.shotBy, player.percentage + (self.potency * deltaT))
+    
+class FrostCloud(ParticleObstacle):
+  
+  def __init__(self, game, coords, dimensions, slowPotency, slowTime, immunePlayer = None, timer = 5, moves = False, speed = 0, angle = 0):
+    super().__init__(game, coords, dimensions, [
+        AnimatedSprite(pygame.image.load('assets/images/objects/ice/blue.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/ice/light_blue.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/ice/lighter_blue.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/ice/turquoise.png'), (0, 0), 0.1, 100),
+        AnimatedSprite(pygame.image.load('assets/images/objects/ice/white.png'), (0, 0), 0.1, 100)
+      ],
+      immunePlayer, timer, moves, speed, angle
+    )
+    
+    # Slowness potency variable
+    self.slow = slowPotency
+    self.slowTime = slowTime
+    
+  def onHit(self, player):
+    player.slow(self.slow, self.slowTime)
+    
+  
 
 class ScorchingRay(Obstacle):
 
