@@ -636,7 +636,7 @@ class Player(GameObject):
     flipHorizontally = True if self.direction < 0 else False # Mirror the image horizontally so it faces the same direction as its movement
     WINDOW.blit(pygame.transform.flip(image, flipHorizontally, False), (self.x, self.y)) # Put image on screen
 
-    # If the charactes is outside the shown screen:
+    # If the characters is outside the shown screen:
     if self.x < -30 or self.x > WINDOW_SIZE[0] + 30 - self.width:
       maxHeight = WINDOW_SIZE[1] - 5 - self.height # Get maximum height the pointer can go up to
       pointerRotation = 0 # Set pointer rotation (this is in degrees, not radians, because pygame takes in degrees)
@@ -830,6 +830,11 @@ class Player(GameObject):
     elif self.percentage < oldPercentage and source != None:
       self.healingReceived += oldPercentage - self.percentage
     
+  # ABILITY FUNCTIONS:
+  # - Activate: when the ability is pressed
+  # - Pressed: while the button for the ability is pressed
+  # - Released: when the button for a pressed ability is released
+
 
   # FIRST ABILITY:
   def activateFirstAbility(self, time = 0, endable = False) -> bool: # TAP OR BEGIN PRESSING ABILITY
@@ -972,7 +977,7 @@ class BarrelMan(Player):
       self.daggerTimer = time.time() # Set cooldown timer
       for i in range(8): # Create 8 daggers, each going a different direction
         angle = i * (math.pi / 4)
-        self.game.obstacles.append(Dagger(self.game, (self.x, self.y), angle, self))
+        self.game.obstacles.append(Dagger(self.game, self.getCenterCoords(), angle, self))
       return super().activateSecondAbility()
     return False
   
@@ -1094,7 +1099,7 @@ class Pog(Player):
         if self != gameObject: # If the player is not themselves
           collide = self.rect.colliderect(gameObject.rect)
           if collide and not gameObject in self.hitObjects and gameObject.punchable: # If player hits Pog
-            gameObject.onNormalAttack(self, (self.x, self.y), 19, 1.25) # Punch the player
+            gameObject.onNormalAttack(self, self.getCenterCoords(), 19, 1.25) # Punch the player
             self.hitObjects.append(gameObject) # Set player to be hit by Pog
           elif not collide and gameObject in self.hitObjects:
             self.hitObjects.remove(gameObject)
@@ -1294,7 +1299,7 @@ class ErrorPlayer(Player):
         self.yDir = 0
         self.firstAbilityMovement = False
         if time.time() - self.bombCooldown >= 5: # If the last time this ability is used is greater than 5 seconds, create a glitch bomb
-          newBomb = GlitchBomb(self.game, (self.x + (self.width / 2), self.y + (self.height / 2)), self)
+          newBomb = GlitchBomb(self.game, self.getCenterCoords(), self)
           self.activeBomb = newBomb
           self.game.obstacles.append(newBomb)
           self.bombCooldown = time.time()
@@ -1503,6 +1508,7 @@ class Kelvhan(Player):
   
 class Driller(Player):
   firstAbilityIsHeld = True
+  secondAbilityIsHeld = False
   
   def __init__(self, game, coords, playerSide, hoverText, hoverTextColor):
     super().__init__(game, 'assets/images/characters/driller/driller.png', coords, playerSide, hoverText, hoverTextColor)
@@ -1523,6 +1529,9 @@ class Driller(Player):
     self.energyTypes = ['fire', 'ice']
     self.energyTypeIndex = 0
     self.energyType = self.energyTypes[self.energyTypeIndex]
+    
+    # C4
+    self.c4 = None
     
   def drawHoverText(self):
     # Draw hover text
@@ -1550,6 +1559,8 @@ class Driller(Player):
         self.energyMeter += deltaT * 20
       else:
         self.energyMeter = 100
+    if self.c4 != None:
+      self.c4.update(self.game)
         
     
   def activateFirstAbility(self, time=0, endable=False) -> bool:
@@ -1583,6 +1594,13 @@ class Driller(Player):
   def releaseFirstAbility(self, time=0, endable=False) -> None:
     self.fillEnergyBar = True
     return super().releaseFirstAbility(time, endable)
+  
+  def activateSecondAbility(self, time=0, endable=False) -> bool:
+    if self.c4 == None:
+      self.c4 = C4(self.game, self.getCenterCoords())
+    else:
+      self.c4.detonate()
+    return super().activateSecondAbility(time, endable)
 
 
 
@@ -1592,7 +1610,7 @@ class Obstacle(GameObject):
 
   def __init__(self, game, coords, img, immunePlayer = None, timer = None):
     self.width, self.height = img.get_width(), img.get_height()
-    super().__init__(coords, (self.width, self.height), img)
+    super().__init__((coords[0] - (self.width / 2), coords[1] - (self.height / 2)), (self.width, self.height), img)
 
     
     # Set variables
@@ -2129,6 +2147,30 @@ class TimeWarp(Obstacle):
       if util.rectangleCircleCollision(gameObject.rect, self.warpCircle) and gameObject != self and gameObject != self.shotBy:
         gameObject.timeWarping = 0.125 # Slow down the player to 12.5% its regular speed
   
+class C4(Obstacle):
+  
+  def __init__(self, game, coords):
+    super().__init__(game, coords, pygame.image.load('assets/images/objects/c4.png'))
+    self.explosion = AnimatedSprite(pygame.image.load('assets/images/explosions/fireball.png'), (0, 0), 0.03, 300)
+    self.explosion.scale((200, 200))
+    self.usesGravity = True
+    self.punchable = False
+    self.detonating = False
+    
+  def update(self, game) -> None:
+    if self.detonating:
+      self.exploding()
+      self.explosion.update()
+    return super().update(game)
+  
+  def detonate(self):
+    self.explosion.x = self.getCenterCoords()[0] - (self.explosion.width / 2)
+    self.explosion.y = self.getCenterCoords()[1] - (self.explosion.height / 2)
+    self.detonating = True
+    
+  def exploding(self):
+    self.explosion.draw()
+    
 
 
 # ANIMATED SPRITE
